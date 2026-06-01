@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* Custom Resets & Scrollers */
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #000000;
+  color: #ffffff;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.015em;
+}
+
+/* Smooth tabular numbers & display font */
+.font-display {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ultra-smooth global transitions for a liquid UI feel */
+.transition-all, .transition-colors, .transition-opacity, .transition-transform, .transition-shadow {
+  transition-duration: 350ms !important;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Keep active (click) states snappy but buttery */
+*:active {
+  transition-duration: 150ms !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Custom Premium Scrollbars */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 10px;
+  margin: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Glassmorphism panel base with liquid glass effect */
+.glass-panel {
+  background: rgba(22, 22, 26, 0.35); /* Mostly transparent and grey base */
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Liquid glass background animations */
+@keyframes liquid-drift-1 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(60px, -80px) scale(1.15); }
+  66% { transform: translate(-40px, 40px) scale(0.9); }
+}
+
+@keyframes liquid-drift-2 {
+  0%, 100% { transform: translate(0px, 0px) scale(1.1); }
+  50% { transform: translate(-70px, 50px) scale(0.85); }
+}
+
+@keyframes liquid-drift-3 {
+  0%, 100% { transform: translate(0px, 0px) scale(0.9); }
+  50% { transform: translate(50px, 70px) scale(1.15); }
+}
+
+.animate-liquid-1 {
+  animation: liquid-drift-1 25s ease-in-out infinite;
+}
+
+.animate-liquid-2 {
+  animation: liquid-drift-2 30s ease-in-out infinite;
+}
+
+.animate-liquid-3 {
+  animation: liquid-drift-3 22s ease-in-out infinite;
+}
+
+/* Custom Visualizer and Floating Glow Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
+    border-color: rgba(6, 182, 212, 0.4);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-spin-slow {
+  animation: spin 22s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3.5s infinite;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Liquid orange glass backdrop animations */
+@keyframes liquid-orange-drift-1 {
+  0%, 100% { transform: translate(0px, 0px) scale(1) rotate(0deg); }
+  33% { transform: translate(60px, -50px) scale(1.25) rotate(120deg); }
+  66% { transform: translate(-40px, 50px) scale(0.8) rotate(240deg); }
+}
+
+@keyframes liquid-orange-drift-2 {
+  0%, 100% { transform: translate(0px, 0px) scale(1.1) rotate(0deg); }
+  50% { transform: translate(-70px, 60px) scale(0.9) rotate(-180deg); }
+}
+
+@keyframes liquid-orange-drift-3 {
+  0%, 100% { transform: translate(0px, 0px) scale(0.85) rotate(0deg); }
+  50% { transform: translate(50px, 80px) scale(1.3) rotate(180deg); }
+}
+
+.animate-liquid-orange-1 {
+  animation: liquid-orange-drift-1 25s ease-in-out infinite;
+}
+
+.animate-liquid-orange-2 {
+  animation: liquid-orange-drift-2 30s ease-in-out infinite;
+}
+
+.animate-liquid-orange-3 {
+  animation: liquid-orange-drift-3 20s ease-in-out infinite;
+}
+
+/* Glass reflection sheen */
+.glass-shine {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-no-drag {
+  -webkit-app-region: no-drag;
+}

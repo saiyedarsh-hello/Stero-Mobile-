@@ -1,0 +1,64 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electron', {
+  // File Scanning & Dialogs
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+  scanFolder: (folderPath) => ipcRenderer.invoke('scan-folder', folderPath),
+  getSavedFolder: () => ipcRenderer.invoke('get-saved-folder'),
+  onScanProgress: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('scan-progress', subscription);
+    return () => {
+      ipcRenderer.removeListener('scan-progress', subscription);
+    };
+  },
+
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  updateSetting: (key, value) => ipcRenderer.invoke('update-setting', key, value),
+
+  // Songs Operations
+  getSongs: () => ipcRenderer.invoke('db-get-songs'),
+  deleteSong: (songId) => ipcRenderer.invoke('db-delete-song', songId),
+  toggleFavorite: (songId, favoriteStatus) => ipcRenderer.invoke('db-toggle-favorite', songId, favoriteStatus),
+  incrementPlayCount: (songId) => ipcRenderer.invoke('db-increment-play-count', songId),
+
+  // Playlists Operations
+  getPlaylists: () => ipcRenderer.invoke('db-get-playlists'),
+  createPlaylist: (name) => ipcRenderer.invoke('db-create-playlist', name),
+  deletePlaylist: (playlistId) => ipcRenderer.invoke('db-delete-playlist', playlistId),
+  addSongToPlaylist: (playlistId, songId) => ipcRenderer.invoke('db-add-song-to-playlist', playlistId, songId),
+  removeSongFromPlaylist: (playlistId, songId) => ipcRenderer.invoke('db-remove-song-from-playlist', playlistId, songId),
+  getPlaylistSongs: (playlistId) => ipcRenderer.invoke('db-get-playlist-songs', playlistId),
+
+  // Track metadata editing
+  selectImageFile: () => ipcRenderer.invoke('select-image-file'),
+  updateSong: (songId, meta) => ipcRenderer.invoke('db-update-song', songId, meta),
+
+  // Custom Albums
+  getCustomAlbums: () => ipcRenderer.invoke('db-get-custom-albums'),
+  createCustomAlbum: (name, coverPath, songIds) => ipcRenderer.invoke('db-create-custom-album', name, coverPath, songIds),
+  updateCustomAlbum: (albumId, name, coverPath, songIds) => ipcRenderer.invoke('db-update-custom-album', albumId, name, coverPath, songIds),
+  deleteCustomAlbum: (albumId) => ipcRenderer.invoke('db-delete-custom-album', albumId),
+  getAlbumSongs: (albumId) => ipcRenderer.invoke('db-get-album-songs', albumId),
+
+  // Downloads
+  ytSearch: (query) => ipcRenderer.invoke('yt-search', query),
+  ytDownload: (songMeta) => ipcRenderer.invoke('yt-download', songMeta),
+  ytGetQueue: () => ipcRenderer.invoke('yt-get-queue'),
+  ytCancelDownload: (videoId) => ipcRenderer.invoke('yt-cancel-download', videoId),
+  onDownloadProgress: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('download-queue-updated', subscription);
+    return () => {
+      ipcRenderer.removeListener('download-queue-updated', subscription);
+    };
+  },
+  onDownloadCompleted: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('download-completed', subscription);
+    return () => {
+      ipcRenderer.removeListener('download-completed', subscription);
+    };
+  },
+});
