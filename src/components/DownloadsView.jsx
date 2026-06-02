@@ -1,15 +1,28 @@
 import { useState, useEffect } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { CloudDownload, Search, Music, Loader2, CheckCircle2 } from 'lucide-react';
+import { CloudDownload, Search, Music, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
+
+const TRENDING_QUERIES = [
+  "Global Top 50 Hits",
+  "Viral Hits 2024",
+  "Top Pop Songs",
+  "Billboard Hot 100",
+  "Trending TikTok Music",
+  "Top EDM Tracks",
+  "Latest Hip Hop Hits",
+  "Acoustic Chill Hits",
+  "Lofi Hip Hop chill"
+];
 
 export default function DownloadsView() {
   const { searchQuery, startDownload, downloadState } = usePlayerStore();
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [trendingIndex, setTrendingIndex] = useState(0);
 
   useEffect(() => {
     const fetchResults = async () => {
-      const query = searchQuery?.trim() || "Global Top 50 Hits";
+      const query = searchQuery?.trim() || TRENDING_QUERIES[trendingIndex];
       setIsSearching(true);
       try {
         const res = await window.electron.ytSearch(query);
@@ -23,7 +36,7 @@ export default function DownloadsView() {
 
     const debounceTimer = setTimeout(fetchResults, 500);
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
+  }, [searchQuery, trendingIndex]);
 
   const handleDownload = async (song) => {
     await startDownload(song);
@@ -71,8 +84,17 @@ export default function DownloadsView() {
       ) : (
         <div className="space-y-2.5 pb-20 animate-fade-in">
           {!searchQuery?.trim() && (
-            <div className="mb-4 text-xs font-bold text-white/60 uppercase tracking-widest">
-              Trending Worldwide
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-xs font-bold text-white/60 uppercase tracking-widest">
+                Trending: {TRENDING_QUERIES[trendingIndex]}
+              </div>
+              <button
+                onClick={() => setTrendingIndex((prev) => (prev + 1) % TRENDING_QUERIES.length)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all duration-300"
+                title="Refresh trending songs"
+              >
+                <RefreshCw size={14} className={isSearching ? "animate-spin" : ""} />
+              </button>
             </div>
           )}
           {results.map((song, i) => {
