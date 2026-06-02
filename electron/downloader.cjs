@@ -39,21 +39,44 @@ class Downloader {
   }
 
   async search(query) {
-    await this.initYTMusic();
-    const results = await this.ytmusic.searchSongs(query);
-    // Format results
-    return results.map(r => ({
-      videoId: r.videoId,
-      title: r.name,
-      artist: r.artist ? r.artist.name : 'Unknown Artist',
-      album: r.album ? r.album.name : 'Unknown Album',
-      duration: r.duration,
-      thumbnail: r.thumbnails && r.thumbnails.length > 0 
-        ? (r.thumbnails[r.thumbnails.length - 1].url.includes('=') 
-            ? r.thumbnails[r.thumbnails.length - 1].url.split('=')[0] + '=w1080-h1080-l90-rj' 
-            : r.thumbnails[r.thumbnails.length - 1].url.replace('hqdefault.jpg', 'maxresdefault.jpg'))
-        : null
-    }));
+    console.log('--- ENTERED search() WITH QUERY:', query);
+    try {
+      const YoutubeMusicApi = require('youtube-music-api');
+      const api = new YoutubeMusicApi();
+      await api.initalize();
+      
+      console.log('searching for query:', query);
+      const res = await api.search(query, 'song');
+      const items = res.content ? res.content.slice(0, 20) : [];
+      
+      const mapped = items.filter(r => r.videoId).map(r => {
+        // duration is in ms
+        const totalSeconds = Math.floor((r.duration || 0) / 1000);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        const durationStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        let thumb = null;
+        if (r.thumbnails && r.thumbnails.length > 0) {
+           const lastThumb = r.thumbnails[r.thumbnails.length - 1].url;
+           thumb = lastThumb.includes('=') ? lastThumb.split('=')[0] + '=w1080-h1080-l90-rj' : lastThumb;
+        }
+
+        return {
+          videoId: r.videoId,
+          title: r.name,
+          artist: r.artist ? (Array.isArray(r.artist) ? r.artist.map(a => a.name).join(', ') : r.artist.name) : 'Unknown Artist',
+          album: r.album ? r.album.name : 'YouTube Music',
+          duration: durationStr,
+          thumbnail: thumb
+        };
+      });
+      console.log('returning mapped length:', mapped.length);
+      return mapped;
+    } catch (err) {
+      console.error('youtube-music-api error:', err);
+      return [];
+    }
   }
 
   async addDownload(songMeta) {
@@ -279,8 +302,12 @@ class Downloader {
   }
 
   getQueueState() {
+    const safeActive = Array.from(this.activeDownloads.values()).map(job => {
+      const { subprocess, ...safeJob } = job;
+      return safeJob;
+    });
     return {
-      active: Array.from(this.activeDownloads.values()),
+      active: safeActive,
       queue: this.queue,
       completed: this.completed
     };

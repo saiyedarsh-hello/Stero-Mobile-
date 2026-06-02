@@ -402,6 +402,22 @@ export default function Visualizer() {
     setActiveView('songs');
   };
 
+  // Escape key to close visualizer
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isActive]);
+
   // Resume AudioContext
   const resumeAudioContext = () => {
     if (window.ensureAetherAudioContext) {
@@ -501,13 +517,13 @@ export default function Visualizer() {
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-end p-6 pr-[160px] z-10 flex-shrink-0">
+        <div className="flex items-center justify-start p-6 z-10 flex-shrink-0">
           <button 
             onClick={handleClose} 
-            className="text-gray-300 border border-white/10 hover:border-white/20 hover:text-white px-4 py-1.5 rounded-full text-xs bg-white/5 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+            className="text-gray-300 border border-white/10 hover:border-white/20 hover:text-white w-10 h-10 rounded-full bg-white/5 flex items-center justify-center transition-all shadow-md active:scale-95"
+            title="Minimize Visualizer"
           >
-            <X size={14} />
-            <span>Close</span>
+            <X size={20} />
           </button>
         </div>
 
@@ -604,14 +620,13 @@ export default function Visualizer() {
       </div>
 
       {/* Header controls */}
-      <div className="flex items-center justify-end p-6 pr-[160px] z-10 flex-shrink-0 relative">
+      <div className="flex items-center justify-start p-6 z-10 flex-shrink-0 relative">
         <button 
           onClick={handleClose} 
-          className="text-gray-300 border border-white/10 hover:border-white/20 hover:text-white px-4 py-1.5 rounded-full text-xs bg-white/5 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+          className="text-gray-300 border border-white/10 hover:border-white/20 hover:text-white w-10 h-10 rounded-full bg-white/5 flex items-center justify-center transition-all shadow-md active:scale-95"
           title="Minimize Visualizer"
         >
-          <X size={14} />
-          <span>Exit Fullscreen</span>
+          <X size={20} />
         </button>
       </div>
 

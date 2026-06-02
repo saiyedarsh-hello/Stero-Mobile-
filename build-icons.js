@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { Jimp } = require('jimp');
 
-const sourceImage = 'C:\\Users\\saiye\\.gemini\\antigravity-ide\\brain\\9131aad2-d7dc-4994-ba1c-8cff095f4738\\media__1780310196868.jpg';
+const sourceImage = 'C:\\Users\\saiye\\.gemini\\antigravity-ide\\brain\\673ebed9-a3ed-41dc-9f02-f68e3772b8a5\\media__1780369814417.png';
 const publicDir = path.join(__dirname, 'public');
 
 if (!fs.existsSync(publicDir)) {

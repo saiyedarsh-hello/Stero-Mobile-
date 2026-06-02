@@ -50,8 +50,8 @@ function createWindow() {
     },
     autoHideMenuBar: true,
     title: 'Stero',
-    transparent: false,
-    backgroundColor: '#000000', // solid black window background
+    transparent: true,
+    backgroundColor: '#00000000', // transparent window background
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
