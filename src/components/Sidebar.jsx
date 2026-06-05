@@ -25,13 +25,18 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
 
   return (
     <aside 
-      className={`bg-gradient-to-b from-white/[0.04] to-white/[0.02] backdrop-blur-xl flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden shadow-[15px_15px_40px_rgba(0,0,0,0.3)] rounded-2xl will-change-[width,margin,opacity] ${
-        isCollapsed ? 'w-0 opacity-0 border-transparent my-4 mx-0 pointer-events-none' : 'w-48 opacity-100 border border-white/8 my-4 ml-4 mr-2'
+      className={`bg-gradient-to-b from-white/[0.04] to-white/[0.02] backdrop-blur-xl flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden will-change-[width,opacity] ${
+        isCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-48 opacity-100'
       }`}
     >
+      {/* Custom right border */}
+      <div 
+        className={`absolute right-0 top-0 bottom-0 w-[1px] bg-white/8 transition-opacity duration-300 z-10 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`} 
+      />
+
       {/* Container wrapper to prevent squishing text during collapse animation, with smooth slide-fade */}
       <div 
-        className={`w-48 h-full flex flex-col justify-start p-4 pb-4 flex-shrink-0 transition-all will-change-[transform,opacity] ${
+        className={`w-48 h-full flex flex-col justify-start p-4 pt-8 pb-4 flex-shrink-0 transition-all will-change-[transform,opacity] ${
           isCollapsed ? 'opacity-0 -translate-x-8 scale-95' : 'opacity-100 translate-x-0 scale-100'
         }`}
       >

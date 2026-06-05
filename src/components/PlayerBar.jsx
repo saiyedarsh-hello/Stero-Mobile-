@@ -354,8 +354,8 @@ export default function PlayerBar() {
   const progressPercent = 0; // Updated exclusively by requestAnimationFrame
 
   return (
-    <div className={`w-full bg-[#141416]/40 backdrop-blur-3xl border-t border-white/10 px-8 py-4.5 flex items-center justify-between gap-6 z-50 select-none relative flex-shrink-0 transition-all duration-500 ease-in-out ${
-      activeView === 'visualizer' ? 'absolute -left-[9999px] top-0 w-1 h-1 opacity-10 pointer-events-none' : 'translate-y-0'
+    <div className={`w-full border-t border-white/5 glass-panel glass-noise px-6 md:px-8 py-3.5 flex items-center justify-between gap-4 md:gap-6 z-50 select-none transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      activeView === 'visualizer' ? 'opacity-0 pointer-events-none translate-y-12 scale-95' : 'opacity-100 translate-y-0 scale-100'
     }`}>
       <audio
         ref={audioRef}

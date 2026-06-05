@@ -4,6 +4,13 @@ import Lenis from 'lenis';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const getMediaUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return `media://${encodeURIComponent(path)}`;
+};
 
 const Visualizer = lazy(() => import('./components/Visualizer'));
 const SongList = lazy(() => import('./components/SongList'));
@@ -57,6 +64,9 @@ if (typeof window !== 'undefined') {
 export default function App() {
   const {
     activeView,
+    activeTrack,
+    dominantColor,
+    setDominantColor,
     searchQuery,
     setSearchQuery,
     fetchLibrary,
@@ -86,6 +96,70 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const scrollWrapperRef = useRef(null);
   const scrollContentRef = useRef(null);
+
+  // Global dominant color extraction
+  useEffect(() => {
+    if (!activeTrack || !activeTrack.has_artwork || !activeTrack.artwork_path) {
+      setDominantColor({ h: 260, s: 40, l: 8 });
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = getMediaUrl(activeTrack.artwork_path);
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 1, 1);
+          const imageData = ctx.getImageData(0, 0, 1, 1).data;
+          const r = imageData[0];
+          const g = imageData[1];
+          const b = imageData[2];
+
+          let rNorm = r / 255;
+          let gNorm = g / 255;
+          let bNorm = b / 255;
+          const max = Math.max(rNorm, gNorm, bNorm);
+          const min = Math.min(rNorm, gNorm, bNorm);
+          let h = 0, s = 0, l = (max + min) / 2;
+
+          if (max !== min) {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+              case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
+              case gNorm: h = (bNorm - rNorm) / d + 2; break;
+              case bNorm: h = (rNorm - gNorm) / d + 4; break;
+            }
+            h /= 6;
+          }
+
+          const hDeg = Math.round(h * 360);
+          const sPct = Math.round(s * 100);
+
+          // Clamp lightness and saturation for a nice dark background glow
+          const lPct = Math.max(5, Math.min(25, Math.round(l * 100)));
+          const sFinal = sPct < 8 ? 0 : Math.max(30, sPct);
+
+          setDominantColor({ h: hDeg, s: sFinal, l: lPct });
+        } else {
+          setDominantColor({ h: 260, s: 40, l: 8 });
+        }
+      } catch (err) {
+        console.error('Failed to extract dominant color:', err);
+        setDominantColor({ h: 260, s: 40, l: 8 });
+      }
+    };
+
+    img.onerror = () => {
+      setDominantColor({ h: 260, s: 40, l: 8 });
+    };
+  }, [activeTrack, setDominantColor]);
 
   // Initialize Lenis for premium smooth momentum scrolling
   useEffect(() => {
@@ -199,8 +273,13 @@ export default function App() {
     return 'Search songs, playlists...';
   };
 
+  const appBgStyle = {
+    backgroundColor: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(2, dominantColor.l - 5)}%)` : '#000',
+    backgroundImage: dominantColor ? `radial-gradient(circle at 50% 0%, hsla(${dominantColor.h}, ${dominantColor.s}%, ${dominantColor.l + 10}%, 0.4) 0%, transparent 60%)` : 'none'
+  };
+
   return (
-    <div className="h-screen w-screen bg-black/80 text-white flex flex-col justify-between overflow-hidden relative select-none font-sans">
+    <div className="h-screen w-screen text-white flex flex-col justify-between overflow-hidden relative select-none font-sans transition-colors duration-1000 ease-in-out" style={appBgStyle}>
       {/* Absolute top drag region for window dragging (bypasses header click issues) */}
       <div className="fixed top-0 left-0 right-[160px] h-6 window-drag z-50 pointer-events-auto" />
 
@@ -214,10 +293,10 @@ export default function App() {
         />
 
         {/* Center Workspace */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-white/[0.02] backdrop-blur-[12px] border border-white/8 shadow-[15px_15px_40px_rgba(0,0,0,0.3)] rounded-2xl my-4 mr-4 transition-all duration-500 will-change-[margin] ${isSidebarCollapsed ? 'ml-4' : 'ml-2'}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden bg-white/[0.02] backdrop-blur-[12px] transition-all duration-500`}>
 
           {/* Header Bar */}
-          <header className="grid grid-cols-3 items-center py-4 pl-8 pr-[160px] border-b border-white/5 select-none flex-shrink-0 relative z-40">
+          <header className="grid grid-cols-3 items-center pt-8 pb-4 pl-8 pr-[160px] border-b border-white/5 select-none flex-shrink-0 relative z-40">
             {/* Left aligned: navigation controls */}
             <div className="flex items-center gap-6 justify-start">
               {/* Sidebar Expand Button (visible only when collapsed) */}
@@ -237,8 +316,8 @@ export default function App() {
                   onClick={goBackView}
                   disabled={historyIndex <= 0}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${historyIndex > 0
-                      ? 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer'
-                      : 'bg-transparent text-gray-600 cursor-not-allowed'
+                    ? 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer'
+                    : 'bg-transparent text-gray-600 cursor-not-allowed'
                     }`}
                 >
                   <ChevronLeft size={16} />
@@ -247,8 +326,8 @@ export default function App() {
                   onClick={goForwardView}
                   disabled={!viewHistory || historyIndex >= viewHistory.length - 1}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${viewHistory && historyIndex < viewHistory.length - 1
-                      ? 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer'
-                      : 'bg-transparent text-gray-600 cursor-not-allowed'
+                    ? 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white cursor-pointer'
+                    : 'bg-transparent text-gray-600 cursor-not-allowed'
                     }`}
                 >
                   <ChevronRight size={16} />
@@ -279,8 +358,8 @@ export default function App() {
                 disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
                 title="Change Music Folder"
                 className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
-                    ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
-                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
+                  ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
                   }`}
               >
                 <FolderSearch size={16} />
@@ -292,8 +371,8 @@ export default function App() {
                 disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
                 title="Resync music library — scan folder for new files"
                 className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
-                    ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
-                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
+                  ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
                   }`}
               >
                 <RefreshCw
@@ -305,10 +384,21 @@ export default function App() {
           </header>
 
           {/* Scrollable Main Content */}
-          <main ref={scrollWrapperRef} className="flex-1 overflow-y-auto px-8 py-6 pb-12">
-            <div ref={scrollContentRef} className="w-full min-h-full">
+          <main ref={scrollWrapperRef} className="flex-1 overflow-y-auto px-8 py-6 pb-36 relative z-10">
+            <div ref={scrollContentRef} className="w-full min-h-full relative">
               <Suspense fallback={<div className="flex items-center justify-center w-full h-full min-h-[50vh] text-white/30 text-sm tracking-widest uppercase font-bold animate-pulse">Loading View...</div>}>
-                {renderActiveView()}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeView}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                    className="w-full min-h-full"
+                  >
+                    {renderActiveView()}
+                  </motion.div>
+                </AnimatePresence>
               </Suspense>
             </div>
           </main>
@@ -320,6 +410,16 @@ export default function App() {
       <Suspense fallback={null}>
         <Visualizer />
       </Suspense>
+
+      {/* Bottom Gradient Mask to fill space behind the floating player */}
+      <div
+        className="fixed bottom-0 left-0 right-0 h-40 pointer-events-none z-40 transition-colors duration-1000 ease-in-out"
+        style={{
+          background: dominantColor
+            ? `linear-gradient(to top, hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(2, dominantColor.l - 8)}%) 0%, transparent 100%)`
+            : 'linear-gradient(to top, #000 0%, transparent 100%)'
+        }}
+      />
 
       {/* Floating Capsule Player Controls */}
       <PlayerBar />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import HoldToDeleteButton from './HoldToDeleteButton';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { 
@@ -226,7 +227,7 @@ export default function SongList() {
         
         <div className="relative z-10 flex flex-col justify-end text-left w-full md:w-auto mb-1">
           <span className="text-[10px] uppercase font-medium tracking-widest text-white/60">{viewSubtitle}</span>
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mt-1 mb-2 leading-tight line-clamp-2 break-words">{viewTitle}</h2>
+          <h2 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight mt-1 mb-2 leading-tight line-clamp-2 break-words">{viewTitle}</h2>
           
           <div className="flex items-center gap-4 mt-2">
             <span className="text-xs text-gray-400 font-medium">{playlistStatsStr}</span>
@@ -304,13 +305,24 @@ export default function SongList() {
                 <th className="py-3.5 px-4 w-20 text-right"></th>
               </tr>
             </thead>
-            <tbody>
+            <motion.tbody
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: { opacity: 1, transition: { staggerChildren: 0.03 } }
+              }}
+            >
               {sortedSongs.map((song, index) => {
                 const isCurrent = activeTrack && activeTrack.id === song.id;
                 const isCurrentPlaying = isCurrent && isPlaying;
                 
                 return (
-                  <tr 
+                  <motion.tr 
+                    variants={{
+                      hidden: { opacity: 0, y: 15 },
+                      visible: { opacity: 1, y: 0 }
+                    }}
                     key={song.id}
                     onDoubleClick={() => handleRowClick(song)}
                     className={`border-b border-white/2 hover:bg-white/5 transition-all cursor-pointer group ${
@@ -330,7 +342,7 @@ export default function SongList() {
                           {isCurrent ? (
                             <Play size={10} fill="currentColor" className="mx-auto" />
                           ) : (
-                            <Play size={10} fill="currentColor" className="opacity-0 group-hover:opacity-100 transition-opacity text-white mx-auto" />
+                            <Play size={10} fill="currentColor" className="opacity-0 group-hover:opacity-100 group-hover:scale-125 transition-all duration-300 text-white mx-auto" />
                           )}
                         </div>
                       )}
@@ -439,10 +451,10 @@ export default function SongList() {
                         </div>
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
-            </tbody>
+            </motion.tbody>
           </table>
         )}
       </div>

@@ -81,7 +81,12 @@ export const usePlayerStore = create((set, get) => ({
   currentPlaylistSongs: [],
   
   // App Settings
+  // App Settings
   appSettings: {},
+  
+  // Theming
+  dominantColor: { h: 0, s: 0, l: 100 },
+  setDominantColor: (color) => set({ dominantColor: color }),
   
   // Navigation & View
   activeView: 'songs', // 'songs', 'favorites', 'playlist-detail', 'album-detail', 'downloads'
