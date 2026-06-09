@@ -131,7 +131,7 @@ export default function MusicSection() {
     <div className="flex flex-col gap-10 select-none animate-fade-in pb-10">
       
       {/* 1. Popular Artist Row */}
-      <section>
+      <section className="order-1">
         <div className="flex items-center justify-between mb-4 px-2">
           <h2 className="text-xl font-bold text-white tracking-tight">
             {ytArtistSearchResults ? 'Search Results (Artists)' : 'Popular Artist'}
@@ -213,7 +213,7 @@ export default function MusicSection() {
 
       {/* 1.5 Your Songs Row (Only visible if followed artists exist) */}
       {followedArtistSongs && followedArtistSongs.length > 0 && (
-        <section className="mt-8">
+        <section className={ytSearchResults ? 'order-3' : 'order-2'}>
           <div className="flex items-center justify-between mb-4 px-2">
             <h2 className="text-xl font-bold text-white tracking-tight">Your Songs</h2>
             <div className="flex items-center gap-2">
@@ -286,7 +286,7 @@ export default function MusicSection() {
       )}
 
       {/* 2. Trendy Songs Row */}
-      <section>
+      <section className={ytSearchResults ? 'order-2' : 'order-3'}>
         <div className="flex items-center justify-between mb-4 px-2">
           <h2 className="text-xl font-bold text-white tracking-tight">
             {ytSearchResults ? 'Search Results' : 'Trendy Songs'}
@@ -369,7 +369,7 @@ export default function MusicSection() {
       </section>
 
       {/* 3. Recently Played */}
-      <section>
+      <section className="order-4">
         <div className="flex items-center justify-between mb-4 px-2">
           <h2 className="text-xl font-bold text-white tracking-tight">Recently Played</h2>
           <div className="flex items-center gap-2">
