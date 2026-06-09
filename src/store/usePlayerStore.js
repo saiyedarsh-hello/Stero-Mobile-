@@ -96,6 +96,13 @@ export const usePlayerStore = create((set, get) => ({
   ytSearchResults: null,
   setYtSearchResults: (results) => set({ ytSearchResults: results }),
   
+  ytArtistSearchResults: null,
+  setYtArtistSearchResults: (results) => set({ ytArtistSearchResults: results }),
+  
+  // Followed Artists
+  followedArtists: [],
+  followedArtistSongs: [],
+  
   // Navigation & View
   activeView: 'music', // 'songs', 'favorites', 'playlist-detail', 'album-detail', 'downloads'
   selectedPlaylistId: null,
@@ -215,6 +222,47 @@ export const usePlayerStore = create((set, get) => ({
     return results.slice(0, 10);
   },
 
+  fetchFollowedArtistsSongs: async (artists) => {
+    if (!window.electron || !artists || artists.length === 0) {
+      set({ followedArtistSongs: [] });
+      return;
+    }
+    
+    try {
+      const promises = artists.map(artist => window.electron.ytSearch(`${artist.name} songs`));
+      const results = await Promise.all(promises);
+      
+      let combined = [];
+      results.forEach(res => {
+         if (res && res.length > 0) {
+            combined = combined.concat(res.slice(0, 10));
+         }
+      });
+      
+      combined.sort(() => Math.random() - 0.5);
+      set({ followedArtistSongs: combined });
+    } catch (err) {
+      console.error("Failed to fetch followed artist songs", err);
+    }
+  },
+
+  toggleFollowArtist: (artist) => {
+    const { followedArtists } = get();
+    const isFollowed = followedArtists.some(a => (a.id || a.browseId) === (artist.id || artist.browseId));
+    let newFollowed;
+    
+    if (isFollowed) {
+      newFollowed = followedArtists.filter(a => (a.id || a.browseId) !== (artist.id || artist.browseId));
+    } else {
+      newFollowed = [...followedArtists, artist];
+    }
+    
+    set({ followedArtists: newFollowed });
+    localStorage.setItem('stero-followed-artists', JSON.stringify(newFollowed));
+    
+    get().fetchFollowedArtistsSongs(newFollowed);
+  },
+
   fetchLibrary: async () => {
     if (!window.electron) {
       console.warn('window.electron is undefined. Running in mock/browser mode.');
@@ -266,9 +314,7 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     // Restore last session after songs are loaded
-    if (loadedSongs && loadedSongs.length > 0) {
-      get().restoreSession(loadedSongs);
-    }
+    get().restoreSession(loadedSongs || []);
   },
 
   updateAppSetting: async (key, value) => {
@@ -287,6 +333,17 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   restoreSession: (songs) => {
+    try {
+      const followed = localStorage.getItem('stero-followed-artists');
+      if (followed) {
+        const parsed = JSON.parse(followed);
+        set({ followedArtists: parsed });
+        get().fetchFollowedArtistsSongs(parsed);
+      }
+    } catch (e) {
+      console.warn('Failed to restore followed artists:', e);
+    }
+
     const sessionData = localStorage.getItem('stero-player-session');
     if (sessionData) {
       try {
@@ -731,6 +788,18 @@ export const usePlayerStore = create((set, get) => ({
       set(state => ({
         songs: state.songs.map(s => s.id === nextTrack.id ? { ...s, play_count: (s.play_count || 0) + 1 } : s)
       }));
+
+      if (nextTrack.isStream && !nextTrack.filepath && window.electron) {
+        window.electron.ytGetStreamUrl(nextTrack.id).then(result => {
+           if (result && result.success && result.url) {
+             set(state => ({
+               activeTrack: state.activeTrack?.id === nextTrack.id 
+                 ? { ...state.activeTrack, filepath: result.url } 
+                 : state.activeTrack
+             }));
+           }
+        }).catch(err => console.error("Failed to fetch stream for next track:", err));
+      }
     }
   },
 
@@ -759,6 +828,18 @@ export const usePlayerStore = create((set, get) => ({
     const prevTrack = queue[prevIndex];
     if (prevTrack) {
       set({ activeTrack: prevTrack, queueIndex: prevIndex, isPlaying: true, currentRepeatCount: 0 });
+
+      if (prevTrack.isStream && !prevTrack.filepath && window.electron) {
+        window.electron.ytGetStreamUrl(prevTrack.id).then(result => {
+           if (result && result.success && result.url) {
+             set(state => ({
+               activeTrack: state.activeTrack?.id === prevTrack.id 
+                 ? { ...state.activeTrack, filepath: result.url } 
+                 : state.activeTrack
+             }));
+           }
+        }).catch(err => console.error("Failed to fetch stream for prev track:", err));
+      }
     }
   },
 
@@ -800,14 +881,14 @@ export const usePlayerStore = create((set, get) => ({
       await window.electron.toggleFavorite(songId, favoriteStatus);
       
       // Update local state arrays
-      const updateSong = (s) => s.id === songId ? { ...s, favorite: newFavoriteStatus } : s;
+      const updateSong = (s) => s.id === songId ? { ...s, favorite: favoriteStatus } : s;
       
       set(state => ({
         songs: state.songs.map(updateSong),
         queue: state.queue.map(updateSong),
         currentPlaylistSongs: state.currentPlaylistSongs.map(updateSong),
         activeTrack: state.activeTrack && state.activeTrack.id === songId 
-          ? { ...state.activeTrack, favorite: newFavoriteStatus } 
+          ? { ...state.activeTrack, favorite: favoriteStatus } 
           : state.activeTrack
       }));
     } catch (err) {

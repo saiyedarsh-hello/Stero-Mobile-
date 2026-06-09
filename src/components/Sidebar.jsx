@@ -21,8 +21,8 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
   } = usePlayerStore();
 
   const menuItems = [
-    { id: 'songs', label: 'My Songs', icon: Music2 },
     { id: 'music', label: 'Music', icon: Globe },
+    { id: 'songs', label: 'My Songs', icon: Music2 },
     { id: 'albums', label: 'Playlists', icon: FolderHeart },
     { id: 'favorites', label: 'Favorites', icon: Heart }
   ];

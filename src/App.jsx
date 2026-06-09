@@ -250,13 +250,19 @@ export default function App() {
     
     if (!searchQuery.trim()) {
       usePlayerStore.getState().setYtSearchResults(null);
+      usePlayerStore.getState().setYtArtistSearchResults(null);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         if (!window.electron) return;
-        const results = await window.electron.ytSearch(searchQuery);
+        
+        const [results, artistResults] = await Promise.all([
+          window.electron.ytSearch(searchQuery),
+          window.electron.ytSearchTrending(searchQuery, 'artist')
+        ]);
+
         if (results && results.length > 0) {
           const mappedResults = results.map(r => ({
             videoId: r.videoId,
@@ -267,6 +273,14 @@ export default function App() {
             duration: 0
           }));
           usePlayerStore.getState().setYtSearchResults(mappedResults);
+        } else {
+          usePlayerStore.getState().setYtSearchResults([]);
+        }
+
+        if (artistResults && artistResults.length > 0) {
+          usePlayerStore.getState().setYtArtistSearchResults(artistResults);
+        } else {
+          usePlayerStore.getState().setYtArtistSearchResults([]);
         }
       } catch (err) {
         console.error('Live search failed:', err);
@@ -379,33 +393,37 @@ export default function App() {
 
             {/* Right aligned: Resync button */}
             <div className="flex justify-end gap-3">
-              <button
-                onClick={scanFolder}
-                disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
-                title="Change Music Folder"
-                className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
-                  ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
-                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
-                  }`}
-              >
-                <FolderSearch size={16} />
-              </button>
+              {activeView === 'songs' && (
+                <>
+                  <button
+                    onClick={scanFolder}
+                    disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
+                    title="Change Music Folder"
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
+                      ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
+                      }`}
+                  >
+                    <FolderSearch size={16} />
+                  </button>
 
-              <button
-                id="resync-library-btn"
-                onClick={resyncFolder}
-                disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
-                title="Resync music library — scan folder for new files"
-                className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
-                  ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
-                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
-                  }`}
-              >
-                <RefreshCw
-                  size={16}
-                  className={scanStatus.status === 'scanning' || scanStatus.status === 'started' ? 'animate-spin' : ''}
-                />
-              </button>
+                  <button
+                    id="resync-library-btn"
+                    onClick={resyncFolder}
+                    disabled={scanStatus.status === 'scanning' || scanStatus.status === 'started'}
+                    title="Resync music library — scan folder for new files"
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all duration-300 active:scale-95 ${scanStatus.status === 'scanning' || scanStatus.status === 'started'
+                      ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/25 hover:text-white shadow-sm'
+                      }`}
+                  >
+                    <RefreshCw
+                      size={16}
+                      className={scanStatus.status === 'scanning' || scanStatus.status === 'started' ? 'animate-spin' : ''}
+                    />
+                  </button>
+                </>
+              )}
             </div>
           </header>
 

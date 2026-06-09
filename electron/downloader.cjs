@@ -124,23 +124,32 @@ class Downloader {
         });
       }
       
-      const res = await api.search(query, type);
-      const items = res.content ? res.content.slice(0, 50) : [];
-      
       if (type === 'artist') {
-        return items.filter(r => r.name).map(r => {
+        const [res1, res2, res3] = await Promise.all([
+          api.search(`${query}`, 'artist'),
+          api.search(`billboard ${query}`, 'artist'),
+          api.search(`global ${query}`, 'artist')
+        ]);
+        
+        const allItems = [...(res1?.content || []), ...(res2?.content || []), ...(res3?.content || [])];
+        const validArtists = allItems.filter(r => r.name);
+        const uniqueItems = Array.from(new Map(validArtists.map(r => [r.browseId || r.name, r])).values());
+        
+        return uniqueItems.map(r => {
           let thumb = null;
           if (r.thumbnails && r.thumbnails.length > 0) {
-             const lastThumb = r.thumbnails[r.thumbnails.length - 1].url;
-             thumb = lastThumb.includes('=') ? lastThumb.split('=')[0] + '=w512-h512-l90-rj' : lastThumb;
+             thumb = r.thumbnails[r.thumbnails.length - 1].url;
           }
           return {
             id: r.browseId || r.name,
             name: r.name,
-            thumbnail: thumb
+            imageUrl: thumb
           };
         });
       }
+      
+      const res = await api.search(query, type);
+      const items = res.content ? res.content.slice(0, 50) : [];
       
       return items.filter(r => r.videoId).map(r => {
         const totalSeconds = Math.floor((r.duration || 0) / 1000);
@@ -159,7 +168,8 @@ class Downloader {
           artist: r.artist ? (Array.isArray(r.artist) ? r.artist.map(a => a.name).join(', ') : r.artist.name) : 'Unknown Artist',
           album: r.album ? r.album.name : 'YouTube Music',
           duration: durationStr,
-          thumbnail: thumb
+          thumbnail: thumb,
+          coverUrl: thumb
         };
       });
     } catch (err) {

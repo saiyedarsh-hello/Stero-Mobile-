@@ -46,6 +46,7 @@ export default function PlayerBar() {
     repeatMode,
     activeView,
     songs,
+    queue,
     savedPosition,
     clearSavedPosition,
     togglePlay,
@@ -474,7 +475,7 @@ export default function PlayerBar() {
           <button
             onClick={prevTrack}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-90"
-            disabled={songs.length === 0}
+            disabled={!queue || queue.length <= 1}
             title="Previous"
           >
             <SkipBack size={16} fill="currentColor" />
@@ -495,7 +496,7 @@ export default function PlayerBar() {
           <button
             onClick={nextTrack}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-90"
-            disabled={songs.length === 0}
+            disabled={!queue || queue.length <= 1}
             title="Next"
           >
             <SkipForward size={16} fill="currentColor" />
