@@ -11,7 +11,10 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    watch: {
+      ignored: ['**/dist-desktop/**', '**/dist-electron/**', '**/dist/**']
+    }
   },
   build: {
     minify: 'esbuild',

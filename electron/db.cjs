@@ -105,11 +105,11 @@ try {
 
 function saveJsonDb() {
   if (!useJsonFallback) return;
-  try {
-    fs.writeFileSync(jsonDbPath, JSON.stringify(jsonData, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Failed to save JSON database:', err);
-  }
+  fs.writeFile(jsonDbPath, JSON.stringify(jsonData, null, 2), 'utf8', (err) => {
+    if (err) {
+      console.error('Failed to save JSON database:', err);
+    }
+  });
 }
 
 // Helper: Get artwork directory path

@@ -8,6 +8,8 @@ import MusicSection from './components/MusicSection';
 import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import ColorWorker from './workers/colorWorker.js?worker&inline';
+
 const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -102,7 +104,16 @@ export default function App() {
   
 
   useEffect(() => {
-    colorWorkerRef.current = new Worker(new URL('./workers/colorWorker.js', import.meta.url), { type: 'module' });
+    try {
+      colorWorkerRef.current = new ColorWorker();
+    } catch (e) {
+      console.warn('Failed to initialize inline ColorWorker, falling back to standard worker:', e);
+      try {
+        colorWorkerRef.current = new Worker(new URL('./workers/colorWorker.js', import.meta.url), { type: 'module' });
+      } catch (err) {
+        console.error('Failed to initialize standard ColorWorker:', err);
+      }
+    }
     return () => {
       colorWorkerRef.current?.terminate();
     };

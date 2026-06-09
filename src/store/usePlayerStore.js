@@ -670,10 +670,10 @@ export const usePlayerStore = create((set, get) => ({
       title: songMeta.title,
       artist: songMeta.artist,
       album: songMeta.album,
-      artwork_path: songMeta.coverUrl || songMeta.thumbnail,
-      has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail),
+      artwork_path: songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path,
+      has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path),
       isStream: true,
-      filepath: '',
+      filepath: songMeta.filepath || '',
       duration: songMeta.duration || 0
     };
     
@@ -682,7 +682,14 @@ export const usePlayerStore = create((set, get) => ({
     // Play immediately to show UI (will be silent/buffering until URL is fetched)
     get().playTrack(tempTrack, mappedList.length > 0 ? mappedList : [tempTrack]);
     
-    // Fetch direct stream URL
+    // Fetch direct stream URL if not already resolved
+    if (tempTrack.filepath && tempTrack.filepath.startsWith('http')) {
+      setTimeout(() => {
+        get().preloadNextTrack();
+      }, 1000);
+      return;
+    }
+
     const result = await window.electron.ytGetStreamUrl(tempTrack.id);
     if (result && result.success && result.url) {
       set(state => ({
@@ -690,6 +697,9 @@ export const usePlayerStore = create((set, get) => ({
           ? { ...state.activeTrack, filepath: result.url } 
           : state.activeTrack
       }));
+      setTimeout(() => {
+        get().preloadNextTrack();
+      }, 1000);
     } else {
       console.error("Failed to fetch stream URL", result);
     }
@@ -743,6 +753,68 @@ export const usePlayerStore = create((set, get) => ({
     set(state => ({
       songs: state.songs.map(s => s.id === track.id ? { ...s, play_count: (s.play_count || 0) + 1 } : s)
     }));
+
+    setTimeout(() => {
+      get().preloadNextTrack();
+    }, 1000);
+  },
+
+  preloadNextTrack: async () => {
+    const { queue, queueIndex, shuffle } = get();
+    if (queue.length <= 1) return;
+
+    let nextIndex;
+    if (shuffle) {
+      nextIndex = (queueIndex + 1) % queue.length;
+    } else {
+      nextIndex = queueIndex + 1;
+    }
+
+    if (nextIndex < queue.length) {
+      const nextTrack = queue[nextIndex];
+      if (nextTrack && nextTrack.isStream && !nextTrack.filepath && window.electron) {
+        console.log(`[Preload] Resolving stream URL in background for next track: ${nextTrack.title}`);
+        window.electron.ytGetStreamUrl(nextTrack.id).then(result => {
+          if (result && result.success && result.url) {
+            set(state => {
+              const updatedQueue = state.queue.map((t, idx) => 
+                idx === nextIndex ? { ...t, filepath: result.url } : t
+              );
+              return { 
+                queue: updatedQueue,
+                activeTrack: state.activeTrack?.id === nextTrack.id && !state.activeTrack.filepath
+                  ? { ...state.activeTrack, filepath: result.url }
+                  : state.activeTrack
+              };
+            });
+            console.log(`[Preload] Successfully preloaded stream URL for: ${nextTrack.title}`);
+          }
+        }).catch(err => console.warn('[Preload] Failed to preload:', err));
+      }
+    }
+  },
+
+  preloadTrack: async (track) => {
+    if (!track || !window.electron) return;
+    const videoId = track.videoId || track.id;
+    if (typeof videoId !== 'string' || videoId.length !== 11) return;
+    
+    if (track.filepath && track.filepath.startsWith('http')) return;
+
+    window.electron.ytGetStreamUrl(videoId).then(result => {
+      if (result && result.success && result.url) {
+        console.log(`[Preload] Pre-resolved successfully for hover: ${track.title}`);
+        set(state => {
+          const updateSong = (s) => (s.videoId === videoId || s.id === videoId) ? { ...s, filepath: result.url } : s;
+          return {
+            songs: state.songs.map(updateSong),
+            queue: state.queue.map(updateSong),
+            ytSearchResults: state.ytSearchResults ? state.ytSearchResults.map(updateSong) : null,
+            trendingSongs: state.trendingSongs.map(updateSong)
+          };
+        });
+      }
+    }).catch(err => console.warn('[Preload] Hover preload failed:', err));
   },
 
   togglePlay: () => {
@@ -800,6 +872,10 @@ export const usePlayerStore = create((set, get) => ({
            }
         }).catch(err => console.error("Failed to fetch stream for next track:", err));
       }
+
+      setTimeout(() => {
+        get().preloadNextTrack();
+      }, 1000);
     }
   },
 
@@ -840,6 +916,10 @@ export const usePlayerStore = create((set, get) => ({
            }
         }).catch(err => console.error("Failed to fetch stream for prev track:", err));
       }
+
+      setTimeout(() => {
+        get().preloadNextTrack();
+      }, 1000);
     }
   },
 

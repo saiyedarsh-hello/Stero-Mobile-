@@ -87,7 +87,25 @@ function createWindow() {
 
 // Register media protocol handler to stream music files and cover art safely
 app.whenReady().then(async () => {
-  protocol.handle('media', (request) => {
+function getMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.mp3': return 'audio/mpeg';
+    case '.m4a': return 'audio/mp4';
+    case '.ogg':
+    case '.oga': return 'audio/ogg';
+    case '.wav': return 'audio/wav';
+    case '.webm': return 'audio/webm';
+    case '.flac': return 'audio/flac';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.png': return 'image/png';
+    case '.webp': return 'image/webp';
+    default: return 'application/octet-stream';
+  }
+}
+
+  protocol.handle('media', async (request) => {
     try {
       console.log('[Media Protocol] Incoming request URL:', request.url);
       
@@ -101,8 +119,17 @@ app.whenReady().then(async () => {
 
       if (!filePath) {
         // Fallback for old style URL
-        const rawUrl = request.url.slice('media://'.length);
-        filePath = decodeURIComponent(rawUrl);
+        try {
+          const rawUrl = request.url.slice('media://'.length);
+          const decoded = decodeURIComponent(rawUrl);
+          if (decoded.startsWith('local/?path=')) {
+            filePath = decoded.slice('local/?path='.length);
+          } else {
+            filePath = decoded;
+          }
+        } catch (err) {
+          console.error('[Media Protocol] Fallback parse failed:', err.message);
+        }
       }
       
       // On Windows, fix paths starting with a slash, e.g. /C:/path -> C:/path
@@ -119,67 +146,44 @@ app.whenReady().then(async () => {
         });
       }
 
+      const mimeType = getMimeType(filePath);
       const stat = fs.statSync(filePath);
       const fileSize = stat.size;
-      const range = request.headers.get('range');
+      const rangeHeader = request.headers.get('Range');
 
-      let headers = new Headers();
-      headers.set('Accept-Ranges', 'bytes');
-      headers.set('Access-Control-Allow-Origin', '*');
-      
-      const ext = path.extname(filePath).toLowerCase();
-      let mimeType = 'audio/mpeg';
-      if (ext === '.wav') mimeType = 'audio/wav';
-      else if (ext === '.flac') mimeType = 'audio/flac';
-      else if (ext === '.ogg') mimeType = 'audio/ogg';
-      else if (ext === '.m4a' || ext === '.mp4') mimeType = 'audio/mp4';
-      else if (ext === '.aac') mimeType = 'audio/aac';
-      else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
-      else if (ext === '.png') mimeType = 'image/png';
-      else if (ext === '.webp') mimeType = 'image/webp';
-      headers.set('Content-Type', mimeType);
+      const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes'
+      };
 
-      if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, '').split('-');
         const start = parseInt(parts[0], 10);
         const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
         const chunksize = (end - start) + 1;
-        
-        headers.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-        headers.set('Content-Length', chunksize);
 
         const fileStream = fs.createReadStream(filePath, { start, end });
-        const webStream = new ReadableStream({
-          start(controller) {
-            fileStream.on('data', chunk => controller.enqueue(chunk));
-            fileStream.on('end', () => controller.close());
-            fileStream.on('error', err => controller.error(err));
-          },
-          cancel() {
-            fileStream.destroy();
-          }
-        });
-
-        return new Response(webStream, { status: 206, headers });
-      } else {
-        headers.set('Content-Length', fileSize);
-        const fileStream = fs.createReadStream(filePath);
         
-        const webStream = new ReadableStream({
-          start(controller) {
-            fileStream.on('data', chunk => controller.enqueue(chunk));
-            fileStream.on('end', () => controller.close());
-            fileStream.on('error', err => controller.error(err));
-          },
-          cancel() {
-            fileStream.destroy();
-          }
-        });
+        headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+        headers['Content-Length'] = chunksize.toString();
 
-        return new Response(webStream, { status: 200, headers });
+        return new Response(fileStream, {
+          status: 206,
+          headers
+        });
+      } else {
+        headers['Content-Length'] = fileSize.toString();
+        const fileStream = fs.createReadStream(filePath);
+        return new Response(fileStream, {
+          status: 200,
+          headers
+        });
       }
     } catch (err) {
-      console.error('Failed to handle media protocol request:', err);
+      console.error('[Media Protocol] Critical Error:', err);
       return new Response('Error loading resource', { status: 500 });
     }
   });

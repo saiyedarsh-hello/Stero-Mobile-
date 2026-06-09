@@ -12,6 +12,9 @@ const https = require('https');
 const crypto = require('crypto');
 const { app } = require('electron');
 
+const streamCache = new Map(); // videoId => { url, timestamp }
+const CACHE_DURATION = 3 * 60 * 60 * 1000; // 3 hours
+
 class Downloader {
   constructor(db) {
     this.db = db;
@@ -178,18 +181,34 @@ class Downloader {
     }
   }
 
+
+
   async getStreamUrl(videoId) {
+    const cached = streamCache.get(videoId);
+    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+      console.log(`[Stream Cache] Hit for: ${videoId}`);
+      return { success: true, url: cached.url };
+    }
+
     try {
       const youtubedl = require('youtube-dl-exec');
       const ytDlpPath = path.join(process.env.YOUTUBE_DL_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
       const url = `https://www.youtube.com/watch?v=${videoId}`;
       const streamUrl = await youtubedl(url, {
         getUrl: true,
-        format: 'bestaudio',
+        format: '140/251/ba/best',
         noWarnings: true,
         noCheckCertificates: true,
+        noPlaylist: true,
+        noCheckFormats: true,
+        youtubeSkipDashManifest: true,
+        youtubeSkipHlsManifest: true,
+        extractorArgs: 'youtube:player-client=android,web'
       }, { execPath: ytDlpPath });
-      return { success: true, url: streamUrl.trim() };
+      
+      const resolvedUrl = streamUrl.trim();
+      streamCache.set(videoId, { url: resolvedUrl, timestamp: Date.now() });
+      return { success: true, url: resolvedUrl };
     } catch (err) {
       console.error('getStreamUrl error:', err);
       return { success: false, error: err.message };
@@ -275,6 +294,7 @@ class Downloader {
         '--ffmpeg-location', ffmpeg,
         '--no-check-certificates',
         '--no-warnings',
+        '--extractor-args', 'youtube:player-client=android,web',
         '--add-header', 'referer:youtube.com',
         '--add-header', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       ];

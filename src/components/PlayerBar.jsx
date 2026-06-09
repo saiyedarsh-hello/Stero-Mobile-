@@ -398,6 +398,7 @@ export default function PlayerBar() {
     style={{ backgroundColor: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(40, dominantColor.l - 5)}%)` : '#FF4F6E' }}>
       <audio
         ref={audioRef}
+        preload="auto"
         crossOrigin="anonymous"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}

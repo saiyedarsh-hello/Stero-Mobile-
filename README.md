@@ -17,6 +17,16 @@ A feature-rich, beautiful Desktop Music Player built with React, Vite, Electron,
 - **Audio/Downloads**: `youtube-dl-exec`, `ytmusic-api`, `ffmpeg-static`, `music-metadata`
 - **Packaging**: `electron-builder`, `tsup`
 
+## Latency & Performance Optimizations ⚡
+
+To ensure sub-second startup times and eliminate audio playback delay, several latency optimizations have been implemented:
+
+- **Manual Range-Request Protocol (`media://`)**: The backend handles byte-range requests manually by serving files via `fs.createReadStream` and responding with `206 Partial Content`. This forces Chromium to stream audio fragments on-demand, allowing local files to play instantly with zero buffering lag.
+- **Hover Pre-Resolution**: Moving the cursor over a track card or list row starts resolving the YouTube stream URL in the background. Since the hover gesture precedes the click, the network lookup is completed early, making playback feel immediate.
+- **In-Memory Streaming Cache**: Resolved YouTube streaming URLs are cached in-memory for 3 hours. Skipping back or re-triggering a song retrieves the direct media URL in under 5ms, avoiding the need to spawn the `yt-dlp` process again.
+- **Queue Preloading**: While a song is playing, the queue preloads the next song's direct stream link asynchronously in the background.
+- **Asynchronous DB Engine**: JSON database persistence writes are performed asynchronously to prevent disk write tasks from blocking the Electron main thread and causing UI freezes during playback updates.
+
 ## File Structure
 
 ```text

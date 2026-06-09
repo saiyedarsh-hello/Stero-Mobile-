@@ -30,6 +30,7 @@ export default function MusicSection() {
     fetchTrendingArtists, 
     streamTrack, 
     playTrack,
+    preloadTrack,
     viewHistory,
     activeView,
     trendingArtists: artists,
@@ -241,6 +242,7 @@ export default function MusicSection() {
               <div 
                 key={song.videoId + '-' + i} 
                 onClick={() => streamTrack(song, followedArtistSongs)}
+                onMouseEnter={() => preloadTrack(song)}
                 className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start"
               >
                 <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95">
@@ -325,6 +327,7 @@ export default function MusicSection() {
             <div 
               key={song.videoId} 
               onClick={() => streamTrack(song, ytSearchResults || trendingSongs)}
+              onMouseEnter={() => preloadTrack(song)}
               className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start"
             >
               <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95">

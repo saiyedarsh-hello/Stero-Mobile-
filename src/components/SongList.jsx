@@ -42,6 +42,7 @@ export default function SongList() {
     activeTrack,
     isPlaying,
     playTrack,
+    preloadTrack,
     togglePlay,
     toggleFavorite,
     setActiveView,
@@ -302,6 +303,11 @@ export default function SongList() {
                 Table: ({ style, ...props }) => <table {...props} style={{...style, width: '100%', borderCollapse: 'separate', borderSpacing: 0}} className="text-left text-sm text-gray-300" />,
                 TableRow: ({ item, ...props }) => (
                   <tr {...props} 
+                    onMouseEnter={() => {
+                      if (item && (item.isStream || (item.filepath && item.filepath.startsWith('yt-stream://')))) {
+                        preloadTrack(item);
+                      }
+                    }}
                     className={`group transition-all ${activeTrack?.id === item?.id ? 'text-white shadow-[0_4px_20px_rgba(0,0,0,0.2)] relative z-10' : 'hover:bg-white/5'}`} 
                     style={{ 
                       borderRadius: '12px', 
