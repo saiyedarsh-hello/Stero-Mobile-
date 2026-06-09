@@ -5,7 +5,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `media://${encodeURIComponent(path)}`;
+  return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
 export default function EditTrackModal({ song, onClose }) {

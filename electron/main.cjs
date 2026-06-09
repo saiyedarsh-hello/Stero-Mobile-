@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const Jimp = require('jimp');
 const db = require('./db.cjs');
 const Downloader = require('./downloader.cjs');
 
@@ -14,6 +15,7 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: 'media',
     privileges: {
+      standard: true,
       bypassCSP: true,
       stream: true,
       secure: true,
@@ -43,20 +45,15 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#00000000',
-      symbolColor: '#a1a1aa',
-      height: 48
-    },
     autoHideMenuBar: true,
     title: 'Stero',
-    transparent: true,
-    backgroundColor: '#00000000', // transparent window background
+    transparent: false,
+    backgroundColor: '#0B0D14', // matching app background
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: true // Safe because we use the custom media:// protocol
+      webSecurity: false // Disabled to allow Web Audio API and Canvas to process cross-origin YouTube streams without muting
     }
   });
 
@@ -71,6 +68,18 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  mainWindow.on('maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-state-changed', { isMaximized: true });
+    }
+  });
+
+  mainWindow.on('unmaximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-state-changed', { isMaximized: false });
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -81,12 +90,22 @@ app.whenReady().then(async () => {
   protocol.handle('media', (request) => {
     try {
       console.log('[Media Protocol] Incoming request URL:', request.url);
-      // Decode the filepath from url
-      const rawUrl = request.url.slice('media://'.length);
-      const decodedPath = decodeURIComponent(rawUrl);
+      
+      let filePath = '';
+      try {
+        const urlObj = new URL(request.url);
+        filePath = urlObj.searchParams.get('path');
+      } catch (e) {
+        console.error('URL parse failed', e);
+      }
+
+      if (!filePath) {
+        // Fallback for old style URL
+        const rawUrl = request.url.slice('media://'.length);
+        filePath = decodeURIComponent(rawUrl);
+      }
       
       // On Windows, fix paths starting with a slash, e.g. /C:/path -> C:/path
-      let filePath = decodedPath;
       if (filePath.startsWith('/') && filePath[2] === ':') {
         filePath = filePath.slice(1);
       }
@@ -94,7 +113,10 @@ app.whenReady().then(async () => {
       
       if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         console.error('[Media Protocol] File not found or is directory:', filePath);
-        return new Response('File not found', { status: 404 });
+        return new Response('File not found', { 
+          status: 404,
+          headers: { 'Access-Control-Allow-Origin': '*' }
+        });
       }
 
       const stat = fs.statSync(filePath);
@@ -103,6 +125,7 @@ app.whenReady().then(async () => {
 
       let headers = new Headers();
       headers.set('Accept-Ranges', 'bytes');
+      headers.set('Access-Control-Allow-Origin', '*');
       
       const ext = path.extname(filePath).toLowerCase();
       let mimeType = 'audio/mpeg';
@@ -189,13 +212,13 @@ ipcMain.handle('select-folder', async () => {
 });
 
 // Recursive audio files search
-function findAudioFiles(dirPath, filesList = []) {
+async function findAudioFiles(dirPath, filesList = []) {
   try {
-    const files = fs.readdirSync(dirPath, { withFileTypes: true });
+    const files = await fs.promises.readdir(dirPath, { withFileTypes: true });
     for (const file of files) {
       const resPath = path.join(dirPath, file.name);
       if (file.isDirectory()) {
-        findAudioFiles(resPath, filesList);
+        await findAudioFiles(resPath, filesList);
       } else {
         const ext = path.extname(file.name).toLowerCase();
         if (['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'].includes(ext)) {
@@ -216,7 +239,7 @@ ipcMain.handle('scan-folder', async (event, folderPath) => {
   // Save the folder path so we can resync later without re-picking
   db.setSavedFolderPath(folderPath);
   
-  const filePaths = findAudioFiles(folderPath);
+  const filePaths = await findAudioFiles(folderPath);
   console.log(`Found ${filePaths.length} audio files. Starting metadata extraction...`);
   
   const total = filePaths.length;
@@ -234,7 +257,7 @@ ipcMain.handle('scan-folder', async (event, folderPath) => {
     try {
       let stats;
       try {
-        stats = fs.statSync(filePath);
+        stats = await fs.promises.stat(filePath);
       } catch (e) {
         stats = { mtimeMs: Date.now() };
       }
@@ -272,12 +295,26 @@ ipcMain.handle('scan-folder', async (event, folderPath) => {
             const fullArtPath = path.join(artworkFolder, artworkFileName);
             
             if (!fs.existsSync(fullArtPath)) {
-              fs.writeFileSync(fullArtPath, pic.data);
+              const image = await Jimp.read(pic.data);
+              await image.cover(400, 400).writeAsync(fullArtPath);
             }
             hasArtwork = 1;
             artworkPath = fullArtPath;
           } catch (artErr) {
             console.error('Error saving artwork for:', filePath, artErr.message);
+            // Fallback to saving raw data if Jimp fails
+            try {
+              const hash = crypto.createHash('md5').update(pic.data).digest('hex');
+              const artworkFileName = `art-${hash}.jpg`;
+              const fullArtPath = path.join(artworkFolder, artworkFileName);
+              if (!fs.existsSync(fullArtPath)) {
+                fs.writeFileSync(fullArtPath, pic.data);
+              }
+              hasArtwork = 1;
+              artworkPath = fullArtPath;
+            } catch (fallbackErr) {
+              console.error('Fallback failed:', fallbackErr.message);
+            }
           }
         }
       }
@@ -349,6 +386,32 @@ ipcMain.handle('get-saved-folder', () => {
   return null;
 });
 
+// Window State
+ipcMain.handle('is-maximized', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return mainWindow.isMaximized();
+  }
+  return false;
+});
+
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.handle('window-close', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+});
+
 // 3. Database operations
 ipcMain.handle('get-settings', () => {
   return db.getSettings();
@@ -361,6 +424,14 @@ ipcMain.handle('update-setting', (event, key, value) => {
 // Downloader IPCs
 ipcMain.handle('yt-search', async (event, query) => {
   return await downloader.search(query);
+});
+
+ipcMain.handle('yt-search-trending', async (event, query, type) => {
+  return await downloader.searchTrending(query, type);
+});
+
+ipcMain.handle('yt-get-stream-url', async (event, videoId) => {
+  return await downloader.getStreamUrl(videoId);
 });
 
 ipcMain.handle('yt-download', async (event, songMeta) => {
@@ -408,6 +479,10 @@ ipcMain.handle('db-delete-playlist', (event, playlistId) => {
 
 ipcMain.handle('db-add-song-to-playlist', (event, playlistId, songId) => {
   return db.addSongToPlaylist(playlistId, songId);
+});
+
+ipcMain.handle('db-add-stream-song', (event, meta) => {
+  return db.addStreamSong(meta);
 });
 
 ipcMain.handle('db-remove-song-from-playlist', (event, playlistId, songId) => {
@@ -463,5 +538,17 @@ ipcMain.handle('db-delete-custom-album', (event, albumId) => {
 
 ipcMain.handle('db-get-album-songs', (event, albumId) => {
   return db.getAlbumSongs(albumId);
+});
+
+ipcMain.handle('set-fullscreen', (event, isFullscreen) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (isFullscreen) {
+      win.setFullScreen(true);
+    } else {
+      win.setFullScreen(false);
+      win.center();
+    }
+  }
 });
 

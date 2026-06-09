@@ -87,9 +87,17 @@ export const usePlayerStore = create((set, get) => ({
   // Theming
   dominantColor: { h: 0, s: 0, l: 100 },
   setDominantColor: (color) => set({ dominantColor: color }),
+
+  // Cached trending data so it only fetches once per session
+  trendingArtists: [],
+  trendingSongs: [],
+  setTrendingData: (artists, songs) => set({ trendingArtists: artists, trendingSongs: songs }),
+  
+  ytSearchResults: null,
+  setYtSearchResults: (results) => set({ ytSearchResults: results }),
   
   // Navigation & View
-  activeView: 'songs', // 'songs', 'favorites', 'playlist-detail', 'album-detail', 'downloads'
+  activeView: 'music', // 'songs', 'favorites', 'playlist-detail', 'album-detail', 'downloads'
   selectedPlaylistId: null,
   selectedAlbumName: null,
   selectedAlbumId: null,
@@ -105,12 +113,15 @@ export const usePlayerStore = create((set, get) => ({
 
   // Playback State
   activeTrack: null,
-  queue: [],
-  queueIndex: -1,
   isPlaying: false,
-  volume: 0.8,
-  muted: false,
+  volume: 1,
+  progress: 0,
+  duration: 0,
+  queue: [],
+  queueIndex: 0,
   shuffle: false,
+  repeat: 'none', // none, all, one
+  playHistory: [], // True history of played trackss as a loop counter
   repeatMode: 0, // functions as a loop counter
   cycleRepeatMode: () => set(state => ({ repeatMode: (state.repeatMode + 1) % 5 })),
   decrementRepeatMode: () => set(state => ({ repeatMode: Math.max(0, state.repeatMode - 1) })),
@@ -163,7 +174,21 @@ export const usePlayerStore = create((set, get) => ({
 
   startDownload: async (songMeta) => {
     if (!window.electron) return { success: false, message: 'Electron not available' };
-    return await window.electron.ytDownload(songMeta);
+    
+    // Downloader expects videoId, but sometimes it is only under `id` for stream tracks
+    const trackForDownload = { ...songMeta, videoId: songMeta.videoId || songMeta.id };
+
+    let savedFolder = await window.electron.getSavedFolder();
+    if (!savedFolder) {
+      const folderPath = await window.electron.selectFolder();
+      if (!folderPath) {
+        return { success: false, message: 'Download cancelled. No folder selected.' };
+      }
+      // Save and set the folder
+      await window.electron.scanFolder(folderPath);
+    }
+
+    return await window.electron.ytDownload(trackForDownload);
   },
 
   cancelDownload: async (videoId) => {
@@ -178,6 +203,18 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   // Actions
+  fetchTrendingSongs: async (language) => {
+    if (!window.electron) return [];
+    return await window.electron.ytSearchTrending(`top ${language} songs`, 'song');
+  },
+
+  fetchTrendingArtists: async (language) => {
+    if (!window.electron) return [];
+    const results = await window.electron.ytSearchTrending(`top 10 monthly ${language} artist`, 'artist');
+    // Ensure we only return top 10
+    return results.slice(0, 10);
+  },
+
   fetchLibrary: async () => {
     if (!window.electron) {
       console.warn('window.electron is undefined. Running in mock/browser mode.');
@@ -250,29 +287,32 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   restoreSession: (songs) => {
-    try {
-      const raw = localStorage.getItem('stero-player-session');
-      if (!raw) return;
-      const session = JSON.parse(raw);
-      if (!session || !session.trackId) return;
-      // Find the track in the freshly loaded library
-      const track = songs.find(s => s.id === session.trackId);
-      if (!track) return;
-      set({
-        activeTrack: track,
-        isPlaying: session.isPlaying ?? false, // Restore isPlaying state!
-        volume: session.volume ?? 0.8,
-        muted: session.muted ?? false,
-        shuffle: session.shuffle ?? false,
-        repeatMode: session.repeatMode ?? 0,
-        currentRepeatCount: 0,
-        savedPosition: session.currentTime ?? 0,
-        queue: songs,
-        queueIndex: songs.findIndex(s => s.id === track.id),
-        activePlaylistId: session.activePlaylistId ?? null,
-      });
-    } catch (e) {
-      console.warn('Failed to restore player session:', e);
+    const sessionData = localStorage.getItem('stero-player-session');
+    if (sessionData) {
+      try {
+        const session = JSON.parse(sessionData);
+        if (session) {
+          // Restore track from songs DB or fallback to serialized track object (for ephemeral streams)
+          const trackToPlay = songs.find(s => s.id === session.trackId) || session.track;
+          if (trackToPlay) {
+            set({
+              activeTrack: trackToPlay,
+              isPlaying: session.isPlaying ?? false, // Restore isPlaying state!
+              volume: session.volume ?? 0.8,
+              muted: session.muted ?? false,
+              shuffle: session.shuffle ?? false,
+              repeatMode: session.repeatMode ?? 0,
+              currentRepeatCount: 0,
+              savedPosition: session.currentTime ?? 0,
+              queue: songs,
+              queueIndex: songs.findIndex(s => s.id === trackToPlay.id),
+              activePlaylistId: session.activePlaylistId ?? null,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to restore player session:', e);
+      }
     }
   },
 
@@ -344,19 +384,6 @@ export const usePlayerStore = create((set, get) => ({
     });
   },
 
-  // Settings Actions
-  updateAppSetting: async (key, value) => {
-    try {
-      if (window.electron) {
-        const updatedSettings = await window.electron.updateSetting(key, value);
-        set({ appSettings: updatedSettings });
-      } else {
-        set(state => ({ appSettings: { ...state.appSettings, [key]: value } }));
-      }
-    } catch (err) {
-      console.error('Failed to update app setting:', err);
-    }
-  },
 
   // Custom Album Actions
   fetchCustomAlbums: async () => {
@@ -564,7 +591,71 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   // Playback Actions
+  streamTrack: async (songMeta, trackList = []) => {
+    if (!window.electron) return;
+    
+    // Map the incoming youtube track list to standard track objects so the queue and visualizer work perfectly
+    const mappedList = trackList.map(t => ({
+      id: t.videoId || t.id,
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      artwork_path: t.coverUrl || t.thumbnail || t.artwork_path,
+      has_artwork: !!(t.coverUrl || t.thumbnail || t.artwork_path),
+      isStream: true,
+      filepath: t.filepath || '',
+      duration: t.duration || 0
+    }));
+
+    // Find the current track in the mapped list, or fallback to standalone
+    const tempTrack = mappedList.find(t => t.id === (songMeta.videoId || songMeta.id)) || {
+      id: songMeta.videoId || songMeta.id,
+      title: songMeta.title,
+      artist: songMeta.artist,
+      album: songMeta.album,
+      artwork_path: songMeta.coverUrl || songMeta.thumbnail,
+      has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail),
+      isStream: true,
+      filepath: '',
+      duration: songMeta.duration || 0
+    };
+    
+    get().addToHistory(tempTrack);
+
+    // Play immediately to show UI (will be silent/buffering until URL is fetched)
+    get().playTrack(tempTrack, mappedList.length > 0 ? mappedList : [tempTrack]);
+    
+    // Fetch direct stream URL
+    const result = await window.electron.ytGetStreamUrl(tempTrack.id);
+    if (result && result.success && result.url) {
+      set(state => ({
+        activeTrack: state.activeTrack?.id === tempTrack.id 
+          ? { ...state.activeTrack, filepath: result.url } 
+          : state.activeTrack
+      }));
+    } else {
+      console.error("Failed to fetch stream URL", result);
+    }
+  },
+
+  addToHistory: (track) => {
+    set((state) => {
+      // Remove duplicate if it exists, then prepend to top
+      const filtered = state.playHistory.filter(t => (t.videoId || t.id) !== (track.videoId || track.id));
+      const newHistory = [track, ...filtered].slice(0, 20); // Keep last 20
+      return { playHistory: newHistory };
+    });
+  },
+
   playTrack: (track, trackList = [], playlistId = undefined) => {
+    get().addToHistory(track);
+    // Unify routing: If the track is a saved stream pointer in the DB, redirect it directly into the streaming pipeline!
+    if (track.filepath && track.filepath.startsWith('yt-stream://')) {
+      const videoId = track.filepath.replace('yt-stream://', '');
+      get().streamTrack({ ...track, videoId }, trackList);
+      return;
+    }
+
     const list = trackList.length > 0 ? trackList : [track];
     const index = list.findIndex(t => t.id === track.id);
     
@@ -584,7 +675,8 @@ export const usePlayerStore = create((set, get) => ({
       queueIndex: index !== -1 ? index : 0,
       isPlaying: true,
       activePlaylistId: resolvedPlaylistId,
-      currentRepeatCount: 0
+      currentRepeatCount: 0,
+      savedPosition: 0
     });
 
     // Increment play count in DB and update state
@@ -678,20 +770,34 @@ export const usePlayerStore = create((set, get) => ({
   resetRepeatCount: () => set({ currentRepeatCount: 0 }),
 
   // Favorites Operations
-  toggleFavorite: async (songId) => {
-    const { songs } = get();
-    const song = songs.find(s => s.id === songId);
-    if (!song) return;
+  toggleFavorite: async (songId, favoriteStatus, trackObj = null) => {
+    if (!window.electron) return;
 
-    const newFavoriteStatus = song.favorite ? 0 : 1;
-    
-    try {
-      if (window.electron) {
-        await window.electron.toggleFavorite(songId, newFavoriteStatus);
-      } else {
-        const mockSong = MOCK_SONGS.find(s => s.id === songId);
-        if (mockSong) mockSong.favorite = newFavoriteStatus;
+    // Handle ephemeral streaming tracks that aren't in the DB yet
+    if (typeof songId === 'string') {
+      const trackMeta = trackObj || (get().activeTrack?.id === songId ? get().activeTrack : null);
+      if (!trackMeta) return;
+
+      try {
+        const newDbSong = await window.electron.addStreamSongToDb(trackMeta);
+        await window.electron.toggleFavorite(newDbSong.id, favoriteStatus);
+        
+        // Update active track with its new real integer ID if it's currently playing
+        if (get().activeTrack?.id === songId || get().activeTrack?.videoId === songId) {
+          set(state => ({ 
+            activeTrack: { ...state.activeTrack, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus }
+          }));
+        }
+        
+        await get().fetchLibrary();
+      } catch (err) {
+        console.error("Failed to favorite stream track:", err);
       }
+      return;
+    }
+
+    try {
+      await window.electron.toggleFavorite(songId, favoriteStatus);
       
       // Update local state arrays
       const updateSong = (s) => s.id === songId ? { ...s, favorite: newFavoriteStatus } : s;

@@ -1,8 +1,8 @@
 version: 1.0.0
 files:
   - url: Stero-Setup-1.0.0.exe
-    sha512: vIHC82yyV38QWZbJDu1ITTlcQnMA/faV7OmEnFalV+YhSzwqjpa+rBHwESo/MoJAj8BFd3pVrN004ZdnwTMVsA==
-    size: 144842264
+    sha512: IkhH/r21qBoamHXoYiAs+0CGzPPHANGpw972eat8Huqz4Ns7Qf0rYuT5rdqmwDPMNuuMC6uF9aHeemDAQ7PfOA==
+    size: 147129128
 path: Stero-Setup-1.0.0.exe
-sha512: vIHC82yyV38QWZbJDu1ITTlcQnMA/faV7OmEnFalV+YhSzwqjpa+rBHwESo/MoJAj8BFd3pVrN004ZdnwTMVsA==
-releaseDate: '2026-06-04T16:57:00.296Z'
+sha512: IkhH/r21qBoamHXoYiAs+0CGzPPHANGpw972eat8Huqz4Ns7Qf0rYuT5rdqmwDPMNuuMC6uF9aHeemDAQ7PfOA==
+releaseDate: '2026-06-09T13:59:52.141Z'

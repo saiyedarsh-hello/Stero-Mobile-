@@ -38,19 +38,111 @@ class Downloader {
     }
   }
 
+  async initYoutubeMusicApi() {
+    if (!this.youtubeMusicApiPromise) {
+      this.youtubeMusicApiPromise = (async () => {
+        const YoutubeMusicApi = require('youtube-music-api');
+        this.youtubeMusicApi = new YoutubeMusicApi();
+        await this.youtubeMusicApi.initalize();
+        return this.youtubeMusicApi;
+      })();
+    }
+    return await this.youtubeMusicApiPromise;
+  }
+
   async search(query) {
-    console.log('--- ENTERED search() WITH QUERY:', query);
     try {
-      const YoutubeMusicApi = require('youtube-music-api');
-      const api = new YoutubeMusicApi();
-      await api.initalize();
-      
-      console.log('searching for query:', query);
-      const res = await api.search(query, 'song');
-      const items = res.content ? res.content.slice(0, 20) : [];
+      await this.initYTMusic();
+      const res = await this.ytmusic.searchSongs(query);
+      const items = res ? res.slice(0, 20) : [];
       
       const mapped = items.filter(r => r.videoId).map(r => {
-        // duration is in ms
+        // duration is in seconds from ytmusic-api
+        const totalSeconds = Math.floor(r.duration || 0);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        const durationStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        let thumb = null;
+        if (r.thumbnails && r.thumbnails.length > 0) {
+           thumb = r.thumbnails[r.thumbnails.length - 1].url;
+        }
+
+        return {
+          videoId: r.videoId,
+          title: r.name,
+          artist: r.artist ? r.artist.name : 'Unknown Artist',
+          album: r.album ? r.album.name : 'YouTube Music',
+          duration: durationStr,
+          thumbnail: thumb
+        };
+      });
+      return mapped;
+    } catch (err) {
+      console.error('ytmusic-api error:', err);
+      return [];
+    }
+  }
+
+  async searchTrending(query, type) {
+    try {
+      const api = await this.initYoutubeMusicApi();
+      
+      if (type === 'song') {
+        const [res1, res2, res3] = await Promise.all([
+          api.search(`${query} top 50`, 'song'),
+          api.search(`${query} billboard`, 'song'),
+          api.search(`${query} global`, 'song')
+        ]);
+        
+        const allItems = [...(res1.content||[]), ...(res2.content||[]), ...(res3.content||[])];
+        
+        // Strictly filter to ensure no albums or podcasts (pure songs only)
+        const validSongs = allItems.filter(r => {
+          const hasArtist = Array.isArray(r.artist) ? r.artist.length > 0 : !!r.artist;
+          const isSongLength = r.duration > 0 && r.duration < 600000; // less than 10 mins
+          const isSong = r.type === 'song' || r.type === 'video';
+          return r.videoId && isSong && hasArtist && isSongLength;
+        });
+        const uniqueItems = Array.from(new Map(validSongs.map(r => [r.videoId, r])).values());
+        
+        // Take exactly top 30 as requested
+        const items = uniqueItems.slice(0, 30);
+        
+        return items.map(r => {
+          return {
+            id: r.videoId,
+            videoId: r.videoId,
+            title: r.name,
+            artist: Array.isArray(r.artist) ? r.artist.map(a => a.name).join(', ') : (r.artist?.name || 'Unknown'),
+            coverUrl: Array.isArray(r.thumbnails) && r.thumbnails.length > 0 
+                      ? r.thumbnails[r.thumbnails.length - 1].url 
+                      : null,
+            duration: r.duration || 0,
+            album: r.album?.name || 'Single',
+          };
+        });
+      }
+      
+      const res = await api.search(query, type);
+      const items = res.content ? res.content.slice(0, 50) : [];
+      
+      if (type === 'artist') {
+        return items.filter(r => r.name).map(r => {
+          let thumb = null;
+          if (r.thumbnails && r.thumbnails.length > 0) {
+             const lastThumb = r.thumbnails[r.thumbnails.length - 1].url;
+             thumb = lastThumb.includes('=') ? lastThumb.split('=')[0] + '=w512-h512-l90-rj' : lastThumb;
+          }
+          return {
+            id: r.browseId || r.name,
+            name: r.name,
+            thumbnail: thumb
+          };
+        });
+      }
+      
+      return items.filter(r => r.videoId).map(r => {
         const totalSeconds = Math.floor((r.duration || 0) / 1000);
         const mins = Math.floor(totalSeconds / 60);
         const secs = totalSeconds % 60;
@@ -58,8 +150,7 @@ class Downloader {
         
         let thumb = null;
         if (r.thumbnails && r.thumbnails.length > 0) {
-           const lastThumb = r.thumbnails[r.thumbnails.length - 1].url;
-           thumb = lastThumb.includes('=') ? lastThumb.split('=')[0] + '=w1080-h1080-l90-rj' : lastThumb;
+           thumb = r.thumbnails[r.thumbnails.length - 1].url;
         }
 
         return {
@@ -71,11 +162,27 @@ class Downloader {
           thumbnail: thumb
         };
       });
-      console.log('returning mapped length:', mapped.length);
-      return mapped;
     } catch (err) {
-      console.error('youtube-music-api error:', err);
+      console.error('searchTrending error:', err);
       return [];
+    }
+  }
+
+  async getStreamUrl(videoId) {
+    try {
+      const youtubedl = require('youtube-dl-exec');
+      const ytDlpPath = path.join(process.env.YOUTUBE_DL_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      const streamUrl = await youtubedl(url, {
+        getUrl: true,
+        format: 'bestaudio',
+        noWarnings: true,
+        noCheckCertificates: true,
+      }, { execPath: ytDlpPath });
+      return { success: true, url: streamUrl.trim() };
+    } catch (err) {
+      console.error('getStreamUrl error:', err);
+      return { success: false, error: err.message };
     }
   }
 
@@ -228,13 +335,25 @@ class Downloader {
           });
         }
 
+        let parsedDuration = 0;
+        if (typeof job.duration === 'number') {
+          parsedDuration = job.duration;
+        } else if (typeof job.duration === 'string') {
+          const parts = job.duration.split(':').map(Number);
+          if (parts.length === 2) {
+            parsedDuration = parts[0] * 60 + parts[1];
+          } else if (parts.length === 3) {
+            parsedDuration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+        }
+
         const stats = fs.statSync(outputPath);
         const newSong = {
           filepath: outputPath,
           title: job.title.trim().replace(/^\d+[\s.\-_]*/, ''),
           artist: job.artist || 'Unknown Artist',
           album: 'Downloads',
-          duration: 0,
+          duration: parsedDuration,
           genre: 'YouTube',
           year: new Date().getFullYear(),
           track_number: null,

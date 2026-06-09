@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef, useMemo, useDeferredValue, forwardRef } from 'react';
+import { TableVirtuoso } from 'react-virtuoso';
 import HoldToDeleteButton from './HoldToDeleteButton';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { 
@@ -7,16 +7,15 @@ import {
   Pause,
   Heart, 
   MoreVertical, 
-  Trash2, 
   Music,
   Clock,
   ChevronUp,
   ChevronDown,
   Pencil,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Disc
 } from 'lucide-react';
 import EditHeroModal from './EditHeroModal';
-import { HERO_BACKGROUNDS } from '../constants/heroBackgrounds';
 
 const formatDuration = (seconds) => {
   if (isNaN(seconds) || seconds === null) return '0:00';
@@ -28,7 +27,7 @@ const formatDuration = (seconds) => {
 const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `media://${encodeURIComponent(path)}`;
+  return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
 export default function SongList() {
@@ -49,15 +48,24 @@ export default function SongList() {
     setEditingSong,
     setEditingPlaylist,
     deleteSong,
-    appSettings
+    appSettings,
+    dominantColor
   } = usePlayerStore();
 
   const [activeMenuSongId, setActiveMenuSongId] = useState(null);
   const [sortField, setSortField] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [isEditingHero, setIsEditingHero] = useState(false);
+  const [scrollParent, setScrollParent] = useState(null);
   
   const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    // Find the nearest scrollable parent which is the main tag in App.jsx
+    setTimeout(() => {
+      setScrollParent(document.querySelector('main'));
+    }, 0);
+  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -69,31 +77,35 @@ export default function SongList() {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  let rawSongsList = [];
-  let viewTitle = 'All Songs';
-  let viewSubtitle = 'Library';
-  let viewArtwork = null;
+  const { rawSongsList, viewTitle, viewSubtitle } = useMemo(() => {
+    let rawSongsList = [];
+    let viewTitle = 'All Songs';
+    let viewSubtitle = 'Library';
 
-  if (activeView === 'songs') {
-    rawSongsList = songs;
-    viewTitle = appSettings?.dashboard_title || 'Lets Start a ride';
-    viewSubtitle = 'Library';
-  } else if (activeView === 'favorites') {
-    rawSongsList = songs.filter(s => s.favorite === 1);
-    viewTitle = 'Favorites';
-    viewSubtitle = 'Collection';
-  } else if (activeView === 'album-detail') {
-    const albumMatch = customAlbums.find(a => a.id === selectedAlbumId);
-    if (albumMatch) {
-      rawSongsList = albumMatch.songs || [];
-      viewTitle = albumMatch.name;
-    } else {
-      rawSongsList = songs.filter(s => s.album === selectedAlbumName);
-      viewTitle = selectedAlbumName || 'Unknown Playlist';
+    if (activeView === 'songs') {
+      rawSongsList = songs;
+      viewTitle = appSettings?.dashboard_title || 'music';
+      viewSubtitle = 'Library';
+    } else if (activeView === 'favorites') {
+      rawSongsList = songs.filter(s => s.favorite === 1);
+      viewTitle = 'Favorites';
+      viewSubtitle = 'Collection';
+    } else if (activeView === 'album-detail') {
+      const albumMatch = customAlbums.find(a => a.id === selectedAlbumId);
+      if (albumMatch) {
+        rawSongsList = albumMatch.songs || [];
+        viewTitle = albumMatch.name;
+      } else {
+        rawSongsList = songs.filter(s => s.album === selectedAlbumName);
+        viewTitle = selectedAlbumName || 'Unknown Playlist';
+      }
+      viewSubtitle = 'Playlist';
     }
-    viewSubtitle = 'Playlist';
-  }
 
+    return { rawSongsList, viewTitle, viewSubtitle };
+  }, [activeView, songs, appSettings?.dashboard_title, customAlbums, selectedAlbumId, selectedAlbumName]);
+
+  let viewArtwork = null;
   const firstWithArt = rawSongsList.find(s => s.has_artwork && s.artwork_path);
   // For album-detail, prefer the custom album's cover image
   const customAlbum = activeView === 'album-detail' && selectedAlbumId
@@ -113,15 +125,17 @@ export default function SongList() {
   const totalSecs = Math.floor(totalPlaylistDuration % 60);
   const playlistStatsStr = `${rawSongsList.length} track${rawSongsList.length !== 1 ? 's' : ''} • ${totalMins}m ${totalSecs}s`;
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   const filtered = useMemo(() => rawSongsList.filter(song => {
-    const query = searchQuery.toLowerCase().trim();
+    const query = deferredSearchQuery.toLowerCase().trim();
     if (!query) return true;
     return (
       (song.title || '').toLowerCase().includes(query) ||
       (song.artist || '').toLowerCase().includes(query) ||
       (song.album || '').toLowerCase().includes(query)
     );
-  }), [rawSongsList, searchQuery]);
+  }), [rawSongsList, deferredSearchQuery]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -178,26 +192,24 @@ export default function SongList() {
   };
 
   // Determine active background styles for Dashboard Hero
-  let heroBgClass = 'bg-[#1c1a26]/40';
-  let showHeroGlow = true;
-  if (activeView === 'songs' && appSettings?.dashboard_bg_id) {
-    const matchedBg = HERO_BACKGROUNDS.find(bg => bg.id === appSettings.dashboard_bg_id);
-    if (matchedBg) {
-      heroBgClass = matchedBg.classes;
-      showHeroGlow = matchedBg.showGlow;
-    }
+  let heroBgStyle = { backgroundColor: 'rgba(28, 26, 38, 0.4)' };
+  if (activeView === 'songs' && dominantColor) {
+    heroBgStyle = { backgroundColor: `hsla(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(15, dominantColor.l - 40)}%, 0.4)` };
   }
 
   return (
     <div className="flex flex-col gap-6 select-none animate-fade-in relative">
       {/* Merged Header Info Panel */}
-      <div className={`relative w-full overflow-hidden rounded-3xl ${heroBgClass} backdrop-blur-2xl border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col md:flex-row items-center md:items-end gap-6 group transition-all duration-500`}>
+      <div 
+        className="relative w-full overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col md:flex-row items-center md:items-end gap-6 group transition-all duration-500"
+        style={heroBgStyle}
+      >
         
         {/* Glow ambient background elements for 'songs' view */}
-        {activeView === 'songs' && showHeroGlow && (
+        {activeView === 'songs' && (
           <>
-            <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-purple-500/10 blur-[100px] pointer-events-none animate-pulse" />
-            <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-cyan-500/5 blur-[100px] pointer-events-none animate-pulse" />
+            <div className="absolute top-0 right-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ backgroundColor: dominantColor ? `hsla(${dominantColor.h}, ${dominantColor.s}%, 60%, 0.2)` : 'rgba(168, 85, 247, 0.1)' }} />
+            <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ backgroundColor: dominantColor ? `hsla(${(dominantColor.h + 60) % 360}, ${dominantColor.s}%, 50%, 0.15)` : 'rgba(6, 182, 212, 0.05)' }} />
           </>
         )}
 
@@ -282,55 +294,56 @@ export default function SongList() {
               : 'No tracks match your search filter.'}
           </div>
         ) : (
-          <table className="w-full border-collapse text-left text-sm text-gray-400">
-            <thead>
-              <tr className="border-b border-white/5 text-[10px] uppercase font-medium tracking-widest text-gray-500">
-                <th className="py-3.5 px-4 w-12 text-center"></th>
-                <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('title')}>
-                  Title {renderSortIndicator('title')}
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('artist')}>
-                  Artist {renderSortIndicator('artist')}
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('album')}>
-                  Playlist {renderSortIndicator('album')}
-                </th>
-                <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('play_count')}>
-                  Plays {renderSortIndicator('play_count')}
-                </th>
-                <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('duration')}>
-                  <Clock size={12} className="inline mr-1" />
-                  {renderSortIndicator('duration')}
-                </th>
-                <th className="py-3.5 px-4 w-20 text-right"></th>
-              </tr>
-            </thead>
-            <motion.tbody
-              initial="hidden"
-              animate="visible"
-              variants={{
-                hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.03 } }
+          scrollParent && (
+            <TableVirtuoso
+              customScrollParent={scrollParent}
+              data={sortedSongs}
+              components={{
+                Table: ({ style, ...props }) => <table {...props} style={{...style, width: '100%', borderCollapse: 'separate', borderSpacing: 0}} className="text-left text-sm text-gray-300" />,
+                TableRow: ({ item, ...props }) => (
+                  <tr {...props} 
+                    className={`group transition-all ${activeTrack?.id === item?.id ? 'text-white shadow-[0_4px_20px_rgba(0,0,0,0.2)] relative z-10' : 'hover:bg-white/5'}`} 
+                    style={{ 
+                      borderRadius: '12px', 
+                      overflow: 'hidden',
+                      backgroundColor: activeTrack?.id === item?.id ? (dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(40, dominantColor.l - 5)}%)` : '#FF4F6E') : undefined
+                    }} 
+                  />
+                ),
+                TableHead: forwardRef((props, ref) => <thead {...props} ref={ref} />),
+                TableBody: forwardRef((props, ref) => <tbody {...props} ref={ref} />),
+                Footer: () => <div className="h-28 w-full" />
               }}
-            >
-              {sortedSongs.map((song, index) => {
+              fixedHeaderContent={() => (
+                <tr className="border-b border-white/5 text-[10px] uppercase font-medium tracking-widest text-gray-500 bg-[#1c1a26]/90 backdrop-blur-md">
+                  <th className="py-3.5 px-4 w-12 text-center"></th>
+                  <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('title')}>
+                    Title {renderSortIndicator('title')}
+                  </th>
+                  <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('artist')}>
+                    Artist {renderSortIndicator('artist')}
+                  </th>
+                  <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('album')}>
+                    Playlist {renderSortIndicator('album')}
+                  </th>
+                  <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('play_count')}>
+                    Plays {renderSortIndicator('play_count')}
+                  </th>
+                  <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('duration')}>
+                    <Clock size={12} className="inline mr-1" />
+                    {renderSortIndicator('duration')}
+                  </th>
+                  <th className="py-3.5 px-4 w-20 text-right"></th>
+                </tr>
+              )}
+              itemContent={(index, song) => {
                 const isCurrent = activeTrack && activeTrack.id === song.id;
                 const isCurrentPlaying = isCurrent && isPlaying;
                 
                 return (
-                  <motion.tr 
-                    variants={{
-                      hidden: { opacity: 0, y: 15 },
-                      visible: { opacity: 1, y: 0 }
-                    }}
-                    key={song.id}
-                    onDoubleClick={() => handleRowClick(song)}
-                    className={`border-b border-white/2 hover:bg-white/5 transition-all cursor-pointer group ${
-                      isCurrent ? 'bg-white/5 text-white' : ''
-                    }`}
-                  >
+                  <>
                     {/* Index or visualizer waves */}
-                    <td className="py-3 px-4 font-display text-xs text-center text-gray-500 group-hover:text-white" onClick={(e) => { e.stopPropagation(); handleRowClick(song); }}>
+                    <td className={`py-3 px-4 font-display text-xs text-center border-b border-white/0 transition-all cursor-pointer rounded-l-xl group-hover:text-white ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={(e) => { e.stopPropagation(); handleRowClick(song); }}>
                       {isCurrentPlaying ? (
                         <div className="flex gap-[2px] justify-center items-end h-3 w-4 mx-auto">
                           <span className="w-[2px] h-full bg-white animate-float"></span>
@@ -342,14 +355,14 @@ export default function SongList() {
                           {isCurrent ? (
                             <Play size={10} fill="currentColor" className="mx-auto" />
                           ) : (
-                            <Play size={10} fill="currentColor" className="opacity-0 group-hover:opacity-100 group-hover:scale-125 transition-all duration-300 text-white mx-auto" />
+                            <Play size={10} fill="currentColor" className="opacity-0 group-[&:hover]:opacity-100 group-[&:hover]:scale-125 transition-all duration-300 text-white mx-auto" />
                           )}
                         </div>
                       )}
                     </td>
 
                     {/* Title */}
-                    <td className="py-3 px-4">
+                    <td className={`py-3 px-4 border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : ''}`} onClick={() => handleRowClick(song)}>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-md bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                           {song.has_artwork && song.artwork_path ? (
@@ -359,23 +372,23 @@ export default function SongList() {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <Music size={14} className="text-gray-500" />
+                            <Disc size={16} className={isCurrent ? 'text-white/60' : 'text-white/20'} />
                           )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-medium text-white truncate max-w-[120px] md:max-w-[200px]">{song.title}</span>
-                          <span className="text-[10px] text-gray-500 truncate max-w-[120px] mt-0.5">{song.artist}</span>
+                          <span className={`text-[13px] font-bold truncate group-hover:text-white transition-colors ${isCurrent ? 'text-white' : 'text-gray-100'}`}>{song.title}</span>
+                          <span className={`text-[11px] truncate mt-0.5 ${isCurrent ? 'text-white/80' : 'text-gray-400'}`}>{song.artist}</span>
                         </div>
                       </div>
                     </td>
 
                     {/* Artist */}
-                    <td className="py-3 px-4 text-xs font-medium truncate max-w-[100px] md:max-w-[150px]">
+                    <td className={`py-3 px-4 text-xs font-medium truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
                       {song.artist}
                     </td>
 
                     {/* Playlist */}
-                    <td className="py-3 px-4 text-xs font-normal text-gray-300 truncate max-w-[100px] md:max-w-[150px]">
+                    <td className={`py-3 px-4 text-xs font-normal truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
                       <span 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -388,32 +401,24 @@ export default function SongList() {
                     </td>
 
                     {/* Plays */}
-                    <td className="py-3 px-4 font-display text-xs text-center font-medium text-gray-400">
+                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
                       {song.play_count || 0}
                     </td>
 
                     {/* Duration */}
-                    <td className="py-3 px-4 font-display text-xs text-center font-medium text-gray-400">
+                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
                       {formatDuration(song.duration)}
                     </td>
 
                     {/* Favorite & Context action dropdown */}
-                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className={`py-3 px-4 text-right border-b border-white/0 rounded-r-xl ${isCurrent ? 'text-white' : ''}`} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-3">
-                        {activeView === 'favorites' && (
-                          <button
-                            onClick={() => handleRowClick(song)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all active:scale-90"
-                            title="Play"
-                          >
-                            {isCurrentPlaying ? <Music size={11} className="animate-pulse" /> : <Play size={11} fill="currentColor" />}
-                          </button>
-                        )}
                         <button 
                           onClick={() => toggleFavorite(song.id)}
                           className={`hover:scale-105 active:scale-95 transition-all ${
-                            song.favorite ? 'text-white' : 'text-gray-500 hover:text-white'
+                            song.favorite ? (isCurrent ? 'text-white' : '') : (isCurrent ? 'text-white/60 hover:text-white' : 'text-gray-500 hover:text-white')
                           }`}
+                          style={song.favorite && !isCurrent ? { color: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(40, dominantColor.l - 5)}%)` : '#FF4F6E' } : {}}
                         >
                           <Heart size={14} fill={song.favorite ? 'currentColor' : 'none'} />
                         </button>
@@ -433,7 +438,6 @@ export default function SongList() {
                               ref={dropdownRef}
                               className="absolute right-0 bottom-full mb-1 bg-[#1a1a1f]/95 backdrop-blur-xl border border-white/15 rounded-2xl w-44 py-2 z-[300] shadow-2xl flex flex-col items-stretch text-left animate-fade-in"
                             >
-                              {/* Edit track */}
                               <button
                                 onClick={() => {
                                   setEditingSong(song);
@@ -444,18 +448,29 @@ export default function SongList() {
                                 <Pencil size={11} />
                                 <span>Edit track info</span>
                               </button>
-
-                              {/* Playlist option removed in favor of unified custom playlists */}
+                              {song.filepath && song.filepath.startsWith('yt-stream://') && (
+                                <button
+                                  onClick={() => {
+                                    const videoId = song.filepath.replace('yt-stream://', '');
+                                    usePlayerStore.getState().startDownload({ ...song, videoId });
+                                    setActiveMenuSongId(null);
+                                  }}
+                                  className="px-3.5 py-1.5 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-all text-left flex items-center gap-2"
+                                >
+                                  <CloudDownload size={11} />
+                                  <span>Download to library</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
                       </div>
                     </td>
-                  </motion.tr>
+                  </>
                 );
-              })}
-            </motion.tbody>
-          </table>
+              }}
+            />
+          )
         )}
       </div>
 

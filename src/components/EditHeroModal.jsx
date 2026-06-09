@@ -1,14 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Image as ImageIcon, Check } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { HERO_BACKGROUNDS } from '../constants/heroBackgrounds';
 
 export default function EditHeroModal({ onClose }) {
   const { appSettings, updateAppSetting } = usePlayerStore();
   
-  const [title, setTitle] = useState(appSettings.dashboard_title || 'Lets Start a ride');
+  const [title, setTitle] = useState(appSettings.dashboard_title || 'music');
   const [coverPath, setCoverPath] = useState(appSettings.dashboard_cover_path || '');
-  const [bgId, setBgId] = useState(appSettings.dashboard_bg_id || 'default');
 
   const handleSelectImage = async () => {
     if (!window.electron) return;
@@ -21,7 +19,6 @@ export default function EditHeroModal({ onClose }) {
   const handleSave = async () => {
     await updateAppSetting('dashboard_title', title);
     await updateAppSetting('dashboard_cover_path', coverPath);
-    await updateAppSetting('dashboard_bg_id', bgId);
     onClose();
   };
 
@@ -60,7 +57,7 @@ export default function EditHeroModal({ onClose }) {
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl bg-white/5 border border-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden">
                 {coverPath ? (
-                  <img src={`media://${encodeURIComponent(coverPath)}`} alt="Cover Preview" className="w-full h-full object-cover" />
+                  <img src={`media://local/?path=${encodeURIComponent(coverPath)}`} alt="Cover Preview" className="w-full h-full object-cover" />
                 ) : (
                   <ImageIcon size={24} className="text-gray-500" />
                 )}
@@ -81,38 +78,6 @@ export default function EditHeroModal({ onClose }) {
                   </button>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Background Preset Field */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Background Style</label>
-            <div className="grid grid-cols-2 gap-3 mt-1">
-              {HERO_BACKGROUNDS.map((bg) => (
-                <div 
-                  key={bg.id}
-                  onClick={() => setBgId(bg.id)}
-                  className={`relative cursor-pointer rounded-xl overflow-hidden h-16 transition-all ring-offset-2 ring-offset-[#141416] ${
-                    bgId === bg.id ? 'ring-2 ring-white scale-[1.02]' : 'ring-1 ring-white/10 hover:ring-white/30'
-                  }`}
-                >
-                  <div className={`absolute inset-0 ${bg.classes}`}></div>
-                  {bg.showGlow && (
-                    <>
-                      <div className="absolute top-0 right-0 w-full h-full rounded-full bg-purple-500/30 blur-xl pointer-events-none" />
-                      <div className="absolute bottom-0 left-0 w-full h-full rounded-full bg-cyan-500/20 blur-xl pointer-events-none" />
-                    </>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                    <span className="text-xs font-bold text-white drop-shadow-md z-10">{bg.name}</span>
-                  </div>
-                  {bgId === bg.id && (
-                    <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 z-20 shadow-md">
-                      <Check size={10} className="text-black" />
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
 

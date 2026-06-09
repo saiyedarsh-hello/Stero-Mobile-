@@ -3,19 +3,20 @@ import { usePlayerStore } from './store/usePlayerStore';
 import Lenis from 'lenis';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
+import WindowControls from './components/WindowControls';
+import MusicSection from './components/MusicSection';
 import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `media://${encodeURIComponent(path)}`;
+  return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
 const Visualizer = lazy(() => import('./components/Visualizer'));
 const SongList = lazy(() => import('./components/SongList'));
 const AlbumGrid = lazy(() => import('./components/AlbumGrid'));
-const DownloadsView = lazy(() => import('./components/DownloadsView'));
 const EditTrackModal = lazy(() => import('./components/EditTrackModal'));
 const EditPlaylistModal = lazy(() => import('./components/EditPlaylistModal'));
 // Global helper to initialize/resume the audio context inside user gestures
@@ -89,7 +90,6 @@ export default function App() {
     viewHistory,
     goBackView,
     goForwardView,
-    playTrack,
     initDownloadListener
   } = usePlayerStore();
 
@@ -97,68 +97,35 @@ export default function App() {
   const scrollWrapperRef = useRef(null);
   const scrollContentRef = useRef(null);
 
-  // Global dominant color extraction
+  // Global dominant color extraction via Web Worker to prevent UI blocking
+  const colorWorkerRef = useRef(null);
+  
+
+  useEffect(() => {
+    colorWorkerRef.current = new Worker(new URL('./workers/colorWorker.js', import.meta.url), { type: 'module' });
+    return () => {
+      colorWorkerRef.current?.terminate();
+    };
+  }, []);
+
   useEffect(() => {
     if (!activeTrack || !activeTrack.has_artwork || !activeTrack.artwork_path) {
       setDominantColor({ h: 260, s: 40, l: 8 });
       return;
     }
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = getMediaUrl(activeTrack.artwork_path);
-
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, 1, 1);
-          const imageData = ctx.getImageData(0, 0, 1, 1).data;
-          const r = imageData[0];
-          const g = imageData[1];
-          const b = imageData[2];
-
-          let rNorm = r / 255;
-          let gNorm = g / 255;
-          let bNorm = b / 255;
-          const max = Math.max(rNorm, gNorm, bNorm);
-          const min = Math.min(rNorm, gNorm, bNorm);
-          let h = 0, s = 0, l = (max + min) / 2;
-
-          if (max !== min) {
-            const d = max - min;
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            switch (max) {
-              case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
-              case gNorm: h = (bNorm - rNorm) / d + 2; break;
-              case bNorm: h = (rNorm - gNorm) / d + 4; break;
-            }
-            h /= 6;
-          }
-
-          const hDeg = Math.round(h * 360);
-          const sPct = Math.round(s * 100);
-
-          // Clamp lightness and saturation for a nice dark background glow
-          const lPct = Math.max(5, Math.min(25, Math.round(l * 100)));
-          const sFinal = sPct < 8 ? 0 : Math.max(30, sPct);
-
-          setDominantColor({ h: hDeg, s: sFinal, l: lPct });
-        } else {
+    const url = getMediaUrl(activeTrack.artwork_path);
+    if (colorWorkerRef.current) {
+      colorWorkerRef.current.onmessage = (e) => {
+        if (e.data.error) {
+          console.error('Failed to extract dominant color in worker:', e.data.error);
           setDominantColor({ h: 260, s: 40, l: 8 });
+        } else {
+          setDominantColor(e.data);
         }
-      } catch (err) {
-        console.error('Failed to extract dominant color:', err);
-        setDominantColor({ h: 260, s: 40, l: 8 });
-      }
-    };
-
-    img.onerror = () => {
-      setDominantColor({ h: 260, s: 40, l: 8 });
-    };
+      };
+      colorWorkerRef.current.postMessage({ url });
+    }
   }, [activeTrack, setDominantColor]);
 
   // Initialize Lenis for premium smooth momentum scrolling
@@ -252,6 +219,8 @@ export default function App() {
   // Determine active component in main view panel
   const renderActiveView = () => {
     switch (activeView) {
+      case 'music':
+        return <MusicSection />;
       case 'songs':
       case 'favorites':
       case 'playlist-detail':
@@ -259,8 +228,6 @@ export default function App() {
         return <SongList />;
       case 'albums':
         return <AlbumGrid />;
-      case 'downloads':
-        return <DownloadsView />;
       case 'visualizer':
         return <SongList />;
       default:
@@ -274,14 +241,72 @@ export default function App() {
   };
 
   const appBgStyle = {
-    backgroundColor: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(2, dominantColor.l - 5)}%)` : '#000',
-    backgroundImage: dominantColor ? `radial-gradient(circle at 50% 0%, hsla(${dominantColor.h}, ${dominantColor.s}%, ${dominantColor.l + 10}%, 0.4) 0%, transparent 60%)` : 'none'
+    backgroundColor: '#0B0D14', // Deep dark navy matching the design
+  };
+
+  // Live Search for YouTube Music View
+  useEffect(() => {
+    if (activeView !== 'music') return;
+    
+    if (!searchQuery.trim()) {
+      usePlayerStore.getState().setYtSearchResults(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        if (!window.electron) return;
+        const results = await window.electron.ytSearch(searchQuery);
+        if (results && results.length > 0) {
+          const mappedResults = results.map(r => ({
+            videoId: r.videoId,
+            title: r.title,
+            artist: r.artist,
+            album: r.album,
+            coverUrl: r.thumbnail,
+            duration: 0
+          }));
+          usePlayerStore.getState().setYtSearchResults(mappedResults);
+        }
+      } catch (err) {
+        console.error('Live search failed:', err);
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeView]);
+
+  const handleSearchKeyDown = async (e) => {
+    if (e.key === 'Enter' && activeView === 'music') {
+      const results = usePlayerStore.getState().ytSearchResults;
+      if (results && results.length > 0) {
+        usePlayerStore.getState().streamTrack(results[0], results);
+      }
+    }
   };
 
   return (
-    <div className="h-screen w-screen text-white flex flex-col justify-between overflow-hidden relative select-none font-sans transition-colors duration-1000 ease-in-out" style={appBgStyle}>
-      {/* Absolute top drag region for window dragging (bypasses header click issues) */}
-      <div className="fixed top-0 left-0 right-[160px] h-6 window-drag z-50 pointer-events-auto" />
+    <div className="h-screen w-screen text-white flex flex-col justify-between overflow-hidden relative select-none font-sans transition-colors duration-1000 ease-in-out transform-gpu rounded-none border-none" style={appBgStyle}>
+      {activeView !== 'visualizer' && (
+        <>
+          {/* Absolute top drag region for window dragging (bypasses header click issues) */}
+          <div className="absolute top-0 left-0 right-[160px] h-6 window-drag z-50 pointer-events-auto" />
+
+          {/* Custom Window Controls */}
+          <WindowControls />
+        </>
+      )}
+
+      {/* Blurred Album Art Background */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out pointer-events-none opacity-40"
+        style={{
+          backgroundImage: activeTrack?.has_artwork ? `url("${getMediaUrl(activeTrack.artwork_path)}")` : 'none',
+          filter: 'blur(120px) saturate(150%)',
+          transform: 'scale(1.2)',
+          zIndex: 0
+        }}
+      />
 
       {/* Upper Workspace Panel */}
       <div className="flex flex-1 w-full overflow-hidden relative z-10">
@@ -344,6 +369,7 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     placeholder={getSearchPlaceholder()}
                     className="select-text bg-transparent border-none outline-none w-full text-white placeholder-white/30 text-sm tracking-wide"
                   />
@@ -413,7 +439,7 @@ export default function App() {
 
       {/* Bottom Gradient Mask to fill space behind the floating player */}
       <div
-        className="fixed bottom-0 left-0 right-0 h-40 pointer-events-none z-40 transition-colors duration-1000 ease-in-out"
+        className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-40 transition-colors duration-1000 ease-in-out"
         style={{
           background: dominantColor
             ? `linear-gradient(to top, hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(2, dominantColor.l - 8)}%) 0%, transparent 100%)`

@@ -12,7 +12,8 @@ import {
   Heart,
   Maximize2,
   Disc,
-  Pencil
+  Pencil,
+  CloudDownload
 } from 'lucide-react';
 
 const formatTime = (seconds) => {
@@ -25,7 +26,7 @@ const formatTime = (seconds) => {
 const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `media://${encodeURIComponent(path)}`;
+  return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
 const getClientX = (e) => {
@@ -57,7 +58,8 @@ export default function PlayerBar() {
     toggleFavorite,
     setActiveView,
     setEditingSong,
-    activePlaylistId
+    activePlaylistId,
+    dominantColor
   } = usePlayerStore();
 
   const currentSong = activeTrack || {
@@ -77,12 +79,36 @@ export default function PlayerBar() {
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
+  const [isIdle, setIsIdle] = useState(false);
+  const isHoveringBarRef = useRef(false);
 
   // Refs for direct DOM updates to bypass React re-rendering
   const timeTextRef = useRef(null);
   const progressBarFillRef = useRef(null);
   const progressThumbRef = useRef(null);
   const rafRef = useRef(null);
+
+  // Auto-hide when mouse is idle
+  useEffect(() => {
+    let timeout;
+    const handleMouseMove = () => {
+      setIsIdle(false);
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        if (!isHoveringBarRef.current) {
+          setIsIdle(true);
+        }
+      }, 3000);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    handleMouseMove();
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      clearTimeout(timeout);
+    };
+  }, []);
 
   // Handle active track change and play/pause synchronization
   useEffect(() => {
@@ -136,6 +162,7 @@ export default function PlayerBar() {
     try {
       localStorage.setItem('stero-player-session', JSON.stringify({
         trackId: track.id,
+        track: track, // Persist full track object for ephemeral streams!
         currentTime: currentTimeSec ?? (audioRef.current?.currentTime ?? 0),
         volume,
         muted,
@@ -342,11 +369,17 @@ export default function PlayerBar() {
   const toggleVisualizer = () => {
     if (activeView === 'visualizer') {
       setActiveView('dashboard');
+      if (window.electron && window.electron.setFullscreen) {
+        window.electron.setFullscreen(false);
+      }
     } else {
       setActiveView('visualizer');
       // Create/Resume AudioContext inside the user gesture stack
       if (window.ensureAetherAudioContext) {
         window.ensureAetherAudioContext();
+      }
+      if (window.electron && window.electron.setFullscreen) {
+        window.electron.setFullscreen(true);
       }
     }
   };
@@ -354,9 +387,14 @@ export default function PlayerBar() {
   const progressPercent = 0; // Updated exclusively by requestAnimationFrame
 
   return (
-    <div className={`w-full border-t border-white/5 glass-panel glass-noise px-6 md:px-8 py-3.5 flex items-center justify-between gap-4 md:gap-6 z-50 select-none transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-      activeView === 'visualizer' ? 'opacity-0 pointer-events-none translate-y-12 scale-95' : 'opacity-100 translate-y-0 scale-100'
-    }`}>
+    <div 
+      onMouseEnter={() => isHoveringBarRef.current = true}
+      onMouseLeave={() => isHoveringBarRef.current = false}
+      className={`absolute bottom-0 left-0 right-0 w-full rounded-t-3xl px-6 md:px-8 py-3.5 flex items-center justify-between gap-4 md:gap-6 z-50 select-none transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      activeView === 'visualizer' ? 'opacity-0 pointer-events-none translate-y-12 scale-95' : 
+      isIdle ? 'opacity-0 pointer-events-none translate-y-full scale-95' : 'opacity-100 translate-y-0 scale-100'
+    }`}
+    style={{ backgroundColor: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(40, dominantColor.l - 5)}%)` : '#FF4F6E' }}>
       <audio
         ref={audioRef}
         crossOrigin="anonymous"
@@ -388,12 +426,12 @@ export default function PlayerBar() {
           <span className="text-sm font-bold text-white truncate max-w-[150px]">{currentSong.title}</span>
           <span className="text-xs text-gray-400 truncate max-w-[150px] mt-0.5">{currentSong.artist}</span>
         </div>
-        <div className="flex items-center gap-1 text-gray-400 ml-2 flex-shrink-0">
+        <div className="flex items-center gap-1 text-white/80 ml-2 flex-shrink-0">
           <button 
             onClick={() => activeTrack && toggleFavorite(activeTrack.id)}
             disabled={!activeTrack}
-            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 hover:scale-105 active:scale-95 transition-all ${
-              activeTrack?.favorite ? 'text-white' : 'text-gray-400 hover:text-white'
+            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all ${
+              activeTrack?.favorite ? 'text-white' : 'text-white/80 hover:text-white'
             } disabled:opacity-30 disabled:cursor-not-allowed`}
             title="Favorite"
           >
@@ -402,11 +440,20 @@ export default function PlayerBar() {
           <button
             onClick={(e) => { e.stopPropagation(); setEditingSong(activeTrack); }}
             disabled={!activeTrack}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             title="Edit track info"
           >
             <Pencil size={13} />
           </button>
+          {activeTrack?.isStream && (
+            <button
+              onClick={() => usePlayerStore.getState().startDownload(activeTrack)}
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95"
+              title="Download to library"
+            >
+              <CloudDownload size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -416,8 +463,8 @@ export default function PlayerBar() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShuffle(!shuffle)}
-            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 transition-all ${
-              shuffle ? 'text-white' : 'text-gray-400 hover:text-white'
+            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-all ${
+              shuffle ? 'text-white' : 'text-white/80 hover:text-white'
             }`}
             title="Shuffle"
           >
@@ -426,7 +473,7 @@ export default function PlayerBar() {
 
           <button
             onClick={prevTrack}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 text-gray-300 hover:text-white transition-all active:scale-90"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-90"
             disabled={songs.length === 0}
             title="Previous"
           >
@@ -435,7 +482,7 @@ export default function PlayerBar() {
 
           <button
             onClick={togglePlay}
-            className="w-10 h-10 rounded-full bg-white text-[#141416] hover:bg-gray-150 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
+            className="w-10 h-10 rounded-full border border-white text-white hover:bg-white/10 flex items-center justify-center transition-all"
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -447,7 +494,7 @@ export default function PlayerBar() {
 
           <button
             onClick={nextTrack}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 text-gray-300 hover:text-white transition-all active:scale-90"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-90"
             disabled={songs.length === 0}
             title="Next"
           >
@@ -456,8 +503,8 @@ export default function PlayerBar() {
 
           <button
             onClick={cycleRepeatMode}
-            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 transition-all relative ${
-              repeatMode > 0 ? 'text-white' : 'text-gray-400 hover:text-white'
+            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-all relative ${
+              repeatMode > 0 ? 'text-white' : 'text-white/80 hover:text-white'
             }`}
             title="Repeat"
           >
@@ -472,7 +519,7 @@ export default function PlayerBar() {
 
         {/* Timeline Seek bar */}
         <div className="flex items-center gap-3 w-full">
-          <span ref={timeTextRef} className="font-display text-[10px] text-gray-500 font-bold w-8 text-left">0:00</span>
+          <span ref={timeTextRef} className="font-display text-[10px] text-white/70 font-bold w-8 text-left">0:00</span>
           <div 
             ref={progressBarRef}
             onMouseDown={handleSeekMouseDown}
@@ -493,7 +540,7 @@ export default function PlayerBar() {
               />
             </div>
           </div>
-          <span className="font-display text-[10px] text-gray-500 font-bold w-8 text-right">{formatTime(duration)}</span>
+          <span className="font-display text-[10px] text-white/70 font-bold w-8 text-right">{formatTime(duration)}</span>
         </div>
       </div>
 
@@ -501,8 +548,8 @@ export default function PlayerBar() {
       <div className="w-1/4 min-w-[220px] flex items-center justify-end gap-4">
         <button 
           onClick={toggleVisualizer}
-          className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 hover:scale-105 active:scale-95 transition-all ${
-            activeView === 'visualizer' ? 'text-white' : 'text-gray-400 hover:text-white'
+          className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all ${
+            activeView === 'visualizer' ? 'text-white' : 'text-white/80 hover:text-white'
           }`}
           title="Canvas Visualizer"
         >
@@ -512,7 +559,7 @@ export default function PlayerBar() {
         <div className="flex items-center gap-1.5">
           <button 
             onClick={() => setMuted(!muted)}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95"
             title={muted ? "Unmute" : "Mute"}
           >
             {muted || volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}

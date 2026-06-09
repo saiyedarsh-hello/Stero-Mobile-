@@ -1,11 +1,14 @@
 import { usePlayerStore } from '../store/usePlayerStore';
 import {  
   FolderHeart,
-  Music, 
-  Heart, 
+  Music,
+  Music2,
+  Heart,
   ChevronLeft,
   CloudDownload,
-  X
+  X,
+  Disc,
+  Globe
 } from 'lucide-react';
 
 export default function Sidebar({ isCollapsed, onToggleCollapse }) {
@@ -13,19 +16,20 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     activeView,
     setActiveView,
     downloadState,
-    cancelDownload
+    cancelDownload,
+    dominantColor
   } = usePlayerStore();
 
   const menuItems = [
-    { id: 'songs', label: 'Songs', icon: Music },
+    { id: 'songs', label: 'My Songs', icon: Music2 },
+    { id: 'music', label: 'Music', icon: Globe },
     { id: 'albums', label: 'Playlists', icon: FolderHeart },
-    { id: 'favorites', label: 'Favorites', icon: Heart },
-    { id: 'downloads', label: 'Download', icon: CloudDownload },
+    { id: 'favorites', label: 'Favorites', icon: Heart }
   ];
 
   return (
     <aside 
-      className={`bg-gradient-to-b from-white/[0.04] to-white/[0.02] backdrop-blur-xl flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden will-change-[width,opacity] ${
+      className={`bg-transparent flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden will-change-[width,opacity] ${
         isCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-48 opacity-100'
       }`}
     >
@@ -69,12 +73,16 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
                     onClick={() => setActiveView(item.id)}
                     className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all duration-300 relative border group ${
                       isActive 
-                        ? 'text-white bg-white/5 border-white/10 font-semibold shadow-[inset_0_1px_1px_rgba(255,255,255,0.03),0_4px_20px_rgba(255,255,255,0.04)] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1 before:h-5 before:bg-white before:rounded-r-md before:shadow-[0_0_8px_rgba(255,255,255,0.4)]' 
+                        ? 'border-transparent font-semibold shadow-none' 
                         : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:translate-x-1'
                     }`}
+                    style={isActive ? {
+                      color: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(60, dominantColor.l)}%)` : '#FF4F6E',
+                      backgroundColor: dominantColor ? `hsla(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(60, dominantColor.l)}%, 0.1)` : 'rgba(255, 79, 110, 0.1)'
+                    } : {}}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon size={16} className={`transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`} />
+                      <Icon size={16} className={`transition-transform duration-300 group-hover:scale-110 ${!isActive ? 'text-gray-400 group-hover:text-gray-200' : ''}`} style={isActive ? { color: dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(60, dominantColor.l)}%)` : '#FF4F6E' } : {}} />
                       <span className="tracking-wide">{item.label}</span>
                     </div>
                   </button>

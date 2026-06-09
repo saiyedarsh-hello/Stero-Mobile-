@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electron', {
   deleteSong: (songId) => ipcRenderer.invoke('db-delete-song', songId),
   toggleFavorite: (songId, favoriteStatus) => ipcRenderer.invoke('db-toggle-favorite', songId, favoriteStatus),
   incrementPlayCount: (songId) => ipcRenderer.invoke('db-increment-play-count', songId),
+  addStreamSongToDb: (meta) => ipcRenderer.invoke('db-add-stream-song', meta),
 
   // Playlists Operations
   getPlaylists: () => ipcRenderer.invoke('db-get-playlists'),
@@ -44,6 +45,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Downloads
   ytSearch: (query) => ipcRenderer.invoke('yt-search', query),
+  ytSearchTrending: (query, type) => ipcRenderer.invoke('yt-search-trending', query, type),
+  ytGetStreamUrl: (videoId) => ipcRenderer.invoke('yt-get-stream-url', videoId),
   ytDownload: (songMeta) => ipcRenderer.invoke('yt-download', songMeta),
   ytGetQueue: () => ipcRenderer.invoke('yt-get-queue'),
   ytCancelDownload: (videoId) => ipcRenderer.invoke('yt-cancel-download', videoId),
@@ -60,5 +63,17 @@ contextBridge.exposeInMainWorld('electron', {
     return () => {
       ipcRenderer.removeListener('download-completed', subscription);
     };
+  },
+  
+  // Window Management
+  setFullscreen: (isFullscreen) => ipcRenderer.invoke('set-fullscreen', isFullscreen),
+  isMaximized: () => ipcRenderer.invoke('is-maximized'),
+  minimize: () => ipcRenderer.invoke('window-minimize'),
+  maximize: () => ipcRenderer.invoke('window-maximize'),
+  close: () => ipcRenderer.invoke('window-close'),
+  onWindowStateChanged: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('window-state-changed', subscription);
+    return () => ipcRenderer.removeListener('window-state-changed', subscription);
   },
 });

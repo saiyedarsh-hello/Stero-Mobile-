@@ -202,6 +202,51 @@ function insertSongs(songsList) {
   }
 }
 
+function addStreamSong(meta) {
+  const filepath = `yt-stream://${meta.videoId}`;
+  
+  if (!useJsonFallback) {
+    const existing = db.prepare('SELECT * FROM songs WHERE filepath = ?').get(filepath);
+    if (existing) return cleanSongs(existing);
+    
+    const info = db.prepare(`
+      INSERT INTO songs (filepath, title, artist, album, duration, has_artwork, artwork_path, added_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      filepath, 
+      meta.title, 
+      meta.artist, 
+      meta.album || 'YouTube Music', 
+      meta.duration || 0,
+      meta.coverUrl ? 1 : 0, 
+      meta.coverUrl || '', 
+      Date.now()
+    );
+    return cleanSongs(db.prepare('SELECT * FROM songs WHERE id = ?').get(info.lastInsertRowid));
+  } else {
+    let existing = jsonData.songs.find(s => s.filepath === filepath);
+    if (existing) return cleanSongs(existing);
+    
+    const newId = jsonData.songs.length > 0 ? Math.max(...jsonData.songs.map(s => s.id)) + 1 : 1;
+    const newSong = {
+      id: newId,
+      filepath,
+      title: meta.title,
+      artist: meta.artist,
+      album: meta.album || 'YouTube Music',
+      duration: meta.duration || 0,
+      has_artwork: meta.coverUrl ? 1 : 0,
+      artwork_path: meta.coverUrl || '',
+      added_at: Date.now(),
+      play_count: 0,
+      favorite: 0
+    };
+    jsonData.songs.push(newSong);
+    saveJsonDb();
+    return cleanSongs(newSong);
+  }
+}
+
 function toggleFavorite(songId, favoriteStatus) {
   const isFav = favoriteStatus ? 1 : 0;
   if (!useJsonFallback) {
@@ -748,5 +793,6 @@ module.exports = {
   setSavedFolderPath,
   removeMissingSongs,
   getSettings,
-  updateSetting
+  updateSetting,
+  addStreamSong
 };
