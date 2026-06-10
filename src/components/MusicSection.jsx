@@ -95,20 +95,7 @@ export default function MusicSection() {
     return () => { isMounted = false; };
   }, [languageString, fetchTrendingArtists, fetchTrendingSongs, activeView, trendingSongs.length, artists.length, setTrendingData]);
   
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const [newArtists, newSongs] = await Promise.all([
-        fetchTrendingArtists(languageString),
-        fetchTrendingSongs(languageString)
-      ]);
-      setTrendingData(newArtists || [], newSongs || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   if (loading) {
     return (
@@ -120,20 +107,29 @@ export default function MusicSection() {
       </div>
     );
   }
-  const baseArtists = ytArtistSearchResults || artists;
-  const displayArtists = [...followedArtists];
-  baseArtists.forEach(artist => {
-    if (!displayArtists.some(a => (a.id || a.browseId) === (artist.id || artist.browseId))) {
-      displayArtists.push(artist);
-    }
-  });
+  let displayArtists = [];
+  if (ytArtistSearchResults) {
+    displayArtists = [...ytArtistSearchResults];
+    followedArtists.forEach(artist => {
+      if (!displayArtists.some(a => (a.id || a.browseId) === (artist.id || artist.browseId))) {
+        displayArtists.push(artist);
+      }
+    });
+  } else {
+    displayArtists = [...followedArtists];
+    artists.forEach(artist => {
+      if (!displayArtists.some(a => (a.id || a.browseId) === (artist.id || artist.browseId))) {
+        displayArtists.push(artist);
+      }
+    });
+  }
 
   return (
     <div className="flex flex-col gap-10 select-none animate-fade-in pb-10">
       
       {/* 1. Popular Artist Row */}
       <section className="order-1">
-        <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center justify-between mb-4 px-4">
           <h2 className="text-xl font-bold text-white tracking-tight">
             {ytArtistSearchResults ? 'Search Results (Artists)' : 'Popular Artist'}
           </h2>
@@ -146,7 +142,7 @@ export default function MusicSection() {
             </button>
           </div>
         </div>
-        <div ref={artistScrollRef} className="flex overflow-x-auto gap-6 pb-4 px-2 snap-x hide-scrollbar">
+        <div ref={artistScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
           {displayArtists.length === 0 ? (
             Array.from({ length: 8 }).map((_, i) => (
               <div key={`artist-skel-${i}`} className="flex flex-col items-center gap-3 flex-shrink-0 snap-start">
@@ -158,7 +154,7 @@ export default function MusicSection() {
             displayArtists.map((artist) => (
             <div 
               key={artist.id} 
-              className="flex flex-col items-center gap-3 cursor-pointer group flex-shrink-0 snap-start relative"
+              className="flex flex-col items-center gap-3 cursor-pointer group flex-shrink-0 snap-start relative hover:z-10"
               onClick={async () => {
                 if (activeTrack && activeTrack.artist && activeTrack.artist.toLowerCase().includes(artist.name.toLowerCase())) {
                   return;
@@ -173,7 +169,7 @@ export default function MusicSection() {
                 }
               }}
             >
-              <div className="w-24 h-24 rounded-full overflow-hidden border border-white/5 shadow-lg group-hover:scale-105 group-active:scale-95 transition-all duration-300 relative">
+              <div className="w-24 h-24 rounded-full overflow-hidden border border-white/5 shadow-lg group-hover:scale-105 group-active:scale-95 transition-all duration-300 relative isolate">
                 {artist.imageUrl || artist.thumbnail ? (
                   <RetryImage src={getHighResUrl(artist.imageUrl || artist.thumbnail)} alt={artist.name} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
@@ -215,7 +211,7 @@ export default function MusicSection() {
       {/* 1.5 Your Songs Row (Only visible if followed artists exist) */}
       {followedArtistSongs && followedArtistSongs.length > 0 && (
         <section className={ytSearchResults ? 'order-3' : 'order-2'}>
-          <div className="flex items-center justify-between mb-4 px-2">
+          <div className="flex items-center justify-between mb-4 px-4">
             <h2 className="text-xl font-bold text-white tracking-tight">Your Songs</h2>
             <div className="flex items-center gap-2">
               <button onClick={() => scrollContainer(followedScrollRef, 'left')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
@@ -226,7 +222,7 @@ export default function MusicSection() {
               </button>
             </div>
           </div>
-          <div ref={followedScrollRef} className="flex overflow-x-auto gap-6 pb-4 px-2 snap-x hide-scrollbar">
+          <div ref={followedScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
             {followedArtistSongs.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={`song-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44 snap-start">
@@ -243,9 +239,9 @@ export default function MusicSection() {
                 key={song.videoId + '-' + i} 
                 onClick={() => streamTrack(song, followedArtistSongs)}
                 onMouseEnter={() => preloadTrack(song)}
-                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start"
+                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start hover:z-10"
               >
-                <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95">
+                <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                   {(song.coverUrl || song.thumbnail) ? (
                     <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                   ) : (
@@ -289,18 +285,11 @@ export default function MusicSection() {
 
       {/* 2. Trendy Songs Row */}
       <section className={ytSearchResults ? 'order-2' : 'order-3'}>
-        <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center justify-between mb-4 px-4">
           <h2 className="text-xl font-bold text-white tracking-tight">
             {ytSearchResults ? 'Search Results' : 'Trendy Songs'}
           </h2>
           <div className="flex items-center gap-4">
-            <button 
-              onClick={handleRefresh}
-              className="px-3 py-1 text-xs font-semibold rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors border border-white/10 flex items-center gap-2"
-            >
-              <Disc size={12} className={loading ? "animate-spin" : ""} />
-              Refresh Weekly
-            </button>
             <div className="flex items-center gap-2">
               <button onClick={() => scrollContainer(songScrollRef, 'left')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
                 <ChevronLeft size={16} />
@@ -311,7 +300,7 @@ export default function MusicSection() {
             </div>
           </div>
         </div>
-        <div ref={songScrollRef} className="flex overflow-x-auto gap-6 pb-4 px-2 snap-x hide-scrollbar">
+        <div ref={songScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
           {(!ytSearchResults && trendingSongs.length === 0) ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={`trend-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44 snap-start">
@@ -328,9 +317,9 @@ export default function MusicSection() {
               key={song.videoId} 
               onClick={() => streamTrack(song, ytSearchResults || trendingSongs)}
               onMouseEnter={() => preloadTrack(song)}
-              className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start"
+              className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start hover:z-10"
             >
-              <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95">
+              <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                 {(song.coverUrl || song.thumbnail) ? (
                   <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
@@ -357,7 +346,7 @@ export default function MusicSection() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleFavorite(dbSong ? dbSong.id : song.videoId, !isFav, song);
+                        toggleFavorite(dbSong ? dbSong.id : song.videoId, isFav ? 0 : 1, song);
                       }}
                       className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5 active:scale-90"
                     >
@@ -373,7 +362,7 @@ export default function MusicSection() {
 
       {/* 3. Recently Played */}
       <section className="order-4">
-        <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center justify-between mb-4 px-4">
           <h2 className="text-xl font-bold text-white tracking-tight">Recently Played</h2>
           <div className="flex items-center gap-2">
             <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
@@ -386,7 +375,7 @@ export default function MusicSection() {
         </div>
         
         {recentlyPlayed.length > 0 ? (
-          <div className="flex flex-col md:flex-row gap-6 px-2">
+          <div className="flex flex-col md:flex-row gap-6 px-4">
             {/* Main Featured Card */}
             <div 
               onClick={() => playTrack(recentlyPlayed[0], recentlyPlayed)}
@@ -428,7 +417,7 @@ export default function MusicSection() {
             </div>
           </div>
         ) : (
-          <div className="text-sm text-gray-500 px-2">No recently played tracks found.</div>
+          <div className="text-sm text-gray-500 px-4">No recently played tracks found.</div>
         )}
       </section>
 

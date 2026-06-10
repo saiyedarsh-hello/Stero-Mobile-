@@ -370,17 +370,11 @@ export default function PlayerBar() {
   const toggleVisualizer = () => {
     if (activeView === 'visualizer') {
       setActiveView('dashboard');
-      if (window.electron && window.electron.setFullscreen) {
-        window.electron.setFullscreen(false);
-      }
     } else {
       setActiveView('visualizer');
       // Create/Resume AudioContext inside the user gesture stack
       if (window.ensureAetherAudioContext) {
         window.ensureAetherAudioContext();
-      }
-      if (window.electron && window.electron.setFullscreen) {
-        window.electron.setFullscreen(true);
       }
     }
   };
@@ -430,7 +424,7 @@ export default function PlayerBar() {
         </div>
         <div className="flex items-center gap-1 text-white/80 ml-2 flex-shrink-0">
           <button 
-            onClick={() => activeTrack && toggleFavorite(activeTrack.id)}
+            onClick={() => activeTrack && toggleFavorite(activeTrack.id || activeTrack.videoId, undefined, activeTrack)}
             disabled={!activeTrack}
             className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all ${
               activeTrack?.favorite ? 'text-white' : 'text-white/80 hover:text-white'
@@ -439,14 +433,7 @@ export default function PlayerBar() {
           >
             <Heart size={15} fill={activeTrack?.favorite ? 'currentColor' : 'none'} />
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); setEditingSong(activeTrack); }}
-            disabled={!activeTrack}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Edit track info"
-          >
-            <Pencil size={13} />
-          </button>
+
           {activeTrack?.isStream && (
             <button
               onClick={() => usePlayerStore.getState().startDownload(activeTrack)}

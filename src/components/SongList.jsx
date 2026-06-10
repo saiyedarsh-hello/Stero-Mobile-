@@ -199,10 +199,10 @@ export default function SongList() {
   }
 
   return (
-    <div className="flex flex-col gap-6 select-none animate-fade-in relative">
+    <div className="flex flex-col xl:flex-row gap-8 select-none animate-fade-in relative items-start">
       {/* Merged Header Info Panel */}
       <div 
-        className="relative w-full overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col md:flex-row items-center md:items-end gap-6 group transition-all duration-500"
+        className="relative w-full xl:w-[35%] xl:sticky xl:top-0 overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col items-center xl:items-start gap-6 group transition-all duration-500 z-20"
         style={heroBgStyle}
       >
         
@@ -216,7 +216,7 @@ export default function SongList() {
 
         <div 
           onClick={handlePlayList}
-          className="relative z-10 w-32 h-32 md:w-44 md:h-44 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0 group/art cursor-pointer"
+          className="relative z-10 w-48 h-48 md:w-64 md:h-64 xl:w-full xl:h-auto xl:aspect-square rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0 group/art cursor-pointer"
         >
           {viewArtwork ? (
             <img src={viewArtwork} alt={viewTitle} className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105" />
@@ -238,14 +238,14 @@ export default function SongList() {
           )}
         </div>
         
-        <div className="relative z-10 flex flex-col justify-end text-left w-full md:w-auto mb-1">
+        <div className="relative z-10 flex flex-col justify-end text-center xl:text-left w-full mb-1 flex-1">
           <span className="text-[10px] uppercase font-medium tracking-widest text-white/60">{viewSubtitle}</span>
           <h2 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight mt-1 mb-2 leading-tight line-clamp-2 break-words">{viewTitle}</h2>
           
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-xs text-gray-400 font-medium">{playlistStatsStr}</span>
+          <div className="flex flex-col xl:flex-col gap-4 mt-4 w-full">
+            <span className="text-sm text-gray-400 font-medium">{playlistStatsStr}</span>
             {rawSongsList.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-center xl:justify-start gap-2 w-full">
                 <button
                   onClick={handlePlayList}
                   className="flex items-center gap-2 bg-white text-[#141416] hover:bg-white/95 px-6 py-2.5 rounded-full text-xs font-bold shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
@@ -287,7 +287,7 @@ export default function SongList() {
       </div>
 
       {/* Track List Table */}
-      <div className="rounded-2xl border border-white/10 bg-white/2 backdrop-blur-md overflow-hidden">
+      <div className="w-full xl:w-[65%] rounded-2xl border border-white/10 bg-white/2 backdrop-blur-md overflow-hidden flex-1">
         {sortedSongs.length === 0 ? (
           <div className="py-20 text-center text-sm text-gray-500 font-medium">
             {activeView === 'favorites' && !searchQuery
@@ -420,7 +420,7 @@ export default function SongList() {
                     <td className={`py-3 px-4 text-right border-b border-white/0 rounded-r-xl ${isCurrent ? 'text-white' : ''}`} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-3">
                         <button 
-                          onClick={() => toggleFavorite(song.id)}
+                          onClick={() => toggleFavorite(song.id || song.videoId, undefined, song)}
                           className={`hover:scale-105 active:scale-95 transition-all ${
                             song.favorite ? (isCurrent ? 'text-white' : '') : (isCurrent ? 'text-white/60 hover:text-white' : 'text-gray-500 hover:text-white')
                           }`}

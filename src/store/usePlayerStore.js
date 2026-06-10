@@ -934,19 +934,38 @@ export const usePlayerStore = create((set, get) => ({
   toggleFavorite: async (songId, favoriteStatus, trackObj = null) => {
     if (!window.electron) return;
 
+    if (favoriteStatus === undefined) {
+      if (typeof songId === 'string') {
+        const dbMatch = get().songs.find(s => s.filepath === `yt-stream://${songId}`);
+        favoriteStatus = dbMatch?.favorite === 1 ? 0 : 1;
+      } else {
+        const dbMatch = get().songs.find(s => s.id === songId);
+        favoriteStatus = dbMatch?.favorite === 1 ? 0 : 1;
+      }
+    }
+
     // Handle ephemeral streaming tracks that aren't in the DB yet
     if (typeof songId === 'string') {
-      const trackMeta = trackObj || (get().activeTrack?.id === songId ? get().activeTrack : null);
+      const trackMeta = trackObj || (get().activeTrack?.id === songId ? get().activeTrack : null) || (get().activeTrack?.videoId === songId ? get().activeTrack : null);
       if (!trackMeta) return;
 
       try {
         const newDbSong = await window.electron.addStreamSongToDb(trackMeta);
         await window.electron.toggleFavorite(newDbSong.id, favoriteStatus);
         
+        const updateQueueSong = (s) => (s.id === songId || s.videoId === songId) ? { ...s, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus } : s;
+        
         // Update active track with its new real integer ID if it's currently playing
         if (get().activeTrack?.id === songId || get().activeTrack?.videoId === songId) {
           set(state => ({ 
-            activeTrack: { ...state.activeTrack, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus }
+            activeTrack: { ...state.activeTrack, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus },
+            queue: state.queue.map(updateQueueSong),
+            currentPlaylistSongs: state.currentPlaylistSongs.map(updateQueueSong)
+          }));
+        } else {
+          set(state => ({ 
+            queue: state.queue.map(updateQueueSong),
+            currentPlaylistSongs: state.currentPlaylistSongs.map(updateQueueSong)
           }));
         }
         
@@ -960,14 +979,17 @@ export const usePlayerStore = create((set, get) => ({
     try {
       await window.electron.toggleFavorite(songId, favoriteStatus);
       
+      const dbMatch = get().songs.find(s => s.id === songId);
+      const videoIdMatch = dbMatch?.filepath?.startsWith('yt-stream://') ? dbMatch.filepath.replace('yt-stream://', '') : null;
+      
       // Update local state arrays
-      const updateSong = (s) => s.id === songId ? { ...s, favorite: favoriteStatus } : s;
+      const updateSong = (s) => (s.id === songId || (videoIdMatch && s.videoId === videoIdMatch)) ? { ...s, favorite: favoriteStatus } : s;
       
       set(state => ({
         songs: state.songs.map(updateSong),
         queue: state.queue.map(updateSong),
         currentPlaylistSongs: state.currentPlaylistSongs.map(updateSong),
-        activeTrack: state.activeTrack && state.activeTrack.id === songId 
+        activeTrack: (state.activeTrack && (state.activeTrack.id === songId || (videoIdMatch && state.activeTrack.videoId === videoIdMatch)))
           ? { ...state.activeTrack, favorite: favoriteStatus } 
           : state.activeTrack
       }));

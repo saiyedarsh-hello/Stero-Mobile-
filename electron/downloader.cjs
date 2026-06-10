@@ -341,13 +341,14 @@ class Downloader {
         let artworkPath = '';
         let hasArtwork = 0;
         
-        if (job.thumbnail) {
+        const artUrl = job.thumbnail || job.coverUrl || job.artwork_path;
+        if (artUrl) {
           const hash = crypto.createHash('md5').update(job.videoId).digest('hex');
           const artworkFileName = `art-yt-${hash}.jpg`;
           const fullArtPath = path.join(this.db.getArtworkDir(), artworkFileName);
           
           await new Promise((resolve) => {
-            https.get(job.thumbnail, (res) => {
+            https.get(artUrl, (res) => {
               if (res.statusCode === 200) {
                 const fileStream = fs.createWriteStream(fullArtPath);
                 res.pipe(fileStream);

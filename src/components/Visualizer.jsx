@@ -28,9 +28,6 @@ export default function Visualizer() {
   // Handle Close
   const handleClose = () => {
     setActiveView('music');
-    if (window.electron && window.electron.setFullscreen) {
-      window.electron.setFullscreen(false);
-    }
   };
 
   // Keyboard escape
