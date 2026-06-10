@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { FolderHeart, Plus, Trash2, Music, Play, Pause } from 'lucide-react';
 import CreateAlbumModal from './CreateAlbumModal';
+import HoldToDeleteButton from './HoldToDeleteButton';
 
 const getMediaUrl = (path) => {
   if (!path) return '';
@@ -45,7 +46,7 @@ export default function AlbumGrid() {
   };
 
   const handleDelete = async (e, albumId) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     setDeletingId(albumId);
     await deleteCustomAlbum(albumId);
     setDeletingId(null);
@@ -148,14 +149,12 @@ export default function AlbumGrid() {
                   </span>
 
                   {/* Delete button */}
-                  <button
-                    onClick={(e) => handleDelete(e, album.id)}
-                    disabled={deletingId === album.id}
-                    className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-gray-500 hover:text-rose-400 hover:border-rose-500/30 opacity-0 group-hover:opacity-100 transition-all duration-200 active:scale-90"
-                    title="Delete playlist"
+                  <div 
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Trash2 size={11} />
-                  </button>
+                    <HoldToDeleteButton onComplete={() => handleDelete(null, album.id)} />
+                  </div>
                 </div>
               );
             })}

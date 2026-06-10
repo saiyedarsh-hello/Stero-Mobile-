@@ -170,7 +170,8 @@ export default function PlayerBar() {
         shuffle,
         repeatMode,
         isPlaying,
-        activePlaylistId
+        activePlaylistId,
+        queue: usePlayerStore.getState().queue
       }));
     } catch (e) { /* quota errors — silently ignore */ }
   }, [volume, muted, shuffle, repeatMode, isPlaying, activePlaylistId]);

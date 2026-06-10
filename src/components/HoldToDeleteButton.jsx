@@ -34,18 +34,18 @@ export default function HoldToDeleteButton({ onComplete }) {
 
   return (
     <div className="relative flex items-center justify-center w-8 h-8 group" title="Hold to delete">
-      <svg className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
+      <svg className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none z-0">
         {progress > 0 && (
           <circle
             cx="16"
             cy="16"
             r={radius}
-            stroke="white"
-            strokeWidth="2.5"
+            stroke="#f87171"
+            strokeWidth="2"
             fill="transparent"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            className="transition-none shadow-[0_0_8px_rgba(255,255,255,0.8)] drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+            className="transition-none drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]"
           />
         )}
       </svg>
@@ -53,9 +53,13 @@ export default function HoldToDeleteButton({ onComplete }) {
         onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setIsHolding(true); setProgress(0); }}
         onMouseUp={(e) => { e.preventDefault(); e.stopPropagation(); setIsHolding(false); setProgress(0); }}
         onMouseLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsHolding(false); setProgress(0); }}
-        className="text-white opacity-80 hover:opacity-100 hover:text-red-400 p-1.5 rounded-full transition-colors flex items-center justify-center z-10 hover:bg-white/10 active:scale-95"
+        className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg transition-all duration-300 border border-white/10 backdrop-blur-md z-10 ${
+          isHolding 
+            ? 'bg-red-500/40 text-white scale-100 border-red-500/50' 
+            : 'bg-white/10 text-white/30 hover:bg-white/20 hover:text-red-400 scale-95'
+        }`}
       >
-        <Trash2 size={14} />
+        <Trash2 size={12} className={isHolding ? "animate-pulse text-red-200" : ""} />
       </button>
     </div>
   );

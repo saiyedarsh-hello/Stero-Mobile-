@@ -361,8 +361,8 @@ export const usePlayerStore = create((set, get) => ({
               repeatMode: session.repeatMode ?? 0,
               currentRepeatCount: 0,
               savedPosition: session.currentTime ?? 0,
-              queue: songs,
-              queueIndex: songs.findIndex(s => s.id === trackToPlay.id),
+              queue: (session.queue && session.queue.length > 0) ? session.queue : songs,
+              queueIndex: Math.max(0, ((session.queue && session.queue.length > 0) ? session.queue : songs).findIndex(s => s.id === trackToPlay.id)),
               activePlaylistId: session.activePlaylistId ?? null,
             });
           }

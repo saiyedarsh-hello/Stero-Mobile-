@@ -89,11 +89,6 @@ export default function Visualizer() {
         </button>
       </div>
 
-      {/* Top Left Logo */}
-      <div className="absolute top-10 left-12 z-20 text-sm font-black tracking-widest text-[#111] uppercase">
-        S/M
-      </div>
-
       {/* Main Grid Layout */}
       <div className="w-full h-full flex items-center justify-between pl-0 pr-12 lg:pr-32 relative">
         
