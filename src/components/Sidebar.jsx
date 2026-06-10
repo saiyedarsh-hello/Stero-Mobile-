@@ -76,11 +76,6 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
             </button>
           </div>
 
-          {/* App Logo */}
-          <div className={`flex items-center justify-center w-full mb-6 mt-2 transition-all duration-500 ${isCollapsed ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
-            <img src="/icon.png" alt="Stero Logo" className="w-28 h-28 object-contain drop-shadow-2xl" onError={(e) => { e.target.style.display = 'none'; }} />
-          </div>
-
           {/* Download Section (Toggleable) */}
           <div 
             className={`transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden will-change-[max-height,opacity,margin] ${
