@@ -66,7 +66,7 @@ export default function EditPlaylistModal({ playlist, onClose }) {
     <div className="fixed inset-0 z-[500] flex items-center justify-center animate-fade-in px-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="bg-white/[0.02] backdrop-blur-[35px] border border-white/8 shadow-[15px_15px_40px_rgba(0,0,0,0.3)] rounded-2xl w-full max-w-2xl relative z-10 flex flex-col overflow-hidden max-h-[85vh]">
+      <div className="bg-white/[0.02] backdrop-blur-[35px] border border-white/8 shadow-[15px_15px_40px_rgba(0,0,0,0.3)] rounded-2xl w-full max-w-2xl relative z-10 flex flex-col overflow-hidden max-h-[75vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
           <h2 className="text-lg font-bold text-white">Edit Playlist</h2>
@@ -89,7 +89,7 @@ export default function EditPlaylistModal({ playlist, onClose }) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-purple-500/50 focus:bg-white/10 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-white/50 focus:bg-white/10 transition-all"
                 placeholder="Name your playlist..."
               />
             </div>
@@ -100,7 +100,7 @@ export default function EditPlaylistModal({ playlist, onClose }) {
                 type="text"
                 value={coverPath}
                 onChange={(e) => setCoverPath(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-purple-500/50 focus:bg-white/10 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-white/50 focus:bg-white/10 transition-all"
                 placeholder="https://..."
               />
             </div>
@@ -109,10 +109,10 @@ export default function EditPlaylistModal({ playlist, onClose }) {
           <div className="w-full h-px bg-white/5 my-2"></div>
 
           {/* Song Selection */}
-          <div className="flex flex-col gap-3 flex-1 min-h-[300px]">
+          <div className="flex flex-col gap-3 flex-1 min-h-[150px]">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">Manage Tracks</label>
-              <span className="text-xs text-purple-400 font-medium bg-purple-500/10 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-white/70 font-medium bg-white/10 px-2 py-0.5 rounded-full">
                 {selectedSongIds.length} Selected
               </span>
             </div>
@@ -146,9 +146,9 @@ export default function EditPlaylistModal({ playlist, onClose }) {
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-colors flex-shrink-0 ${
-                      isSelected ? 'bg-purple-500 border-purple-500' : 'border-white/20'
+                      isSelected ? 'bg-white border-white text-black' : 'border-white/20'
                     }`}>
-                      {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
+                      {isSelected && <Check size={10} strokeWidth={3} />}
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className={`text-sm truncate font-medium ${isSelected ? 'text-white' : 'text-gray-300'}`}>

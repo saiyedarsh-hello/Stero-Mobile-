@@ -382,6 +382,17 @@ export default function PlayerBar() {
 
   const progressPercent = 0; // Updated exclusively by requestAnimationFrame
 
+  const handleError = (e) => {
+    console.error('Audio playback error:', e);
+    // Gracefully skip to the next track if the current track file becomes unavailable (e.g. deleted)
+    const state = usePlayerStore.getState();
+    if (state.queue && state.queue.length > 1) {
+      state.nextTrack();
+    } else {
+      state.togglePlay();
+    }
+  };
+
   return (
     <div 
       onMouseEnter={() => isHoveringBarRef.current = true}
@@ -398,6 +409,7 @@ export default function PlayerBar() {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
+        onError={handleError}
       />
 
       {/* Left section: Artwork + Song info + Favorite */}

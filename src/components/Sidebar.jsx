@@ -82,7 +82,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
               isDownloadsOpen ? 'max-h-[400px] opacity-100 mb-4' : 'max-h-0 opacity-0 mb-0 pointer-events-none'
             }`}
           >
-            <div className={`bg-[#141416]/90 border border-white/10 rounded-xl p-3 shadow-2xl relative z-50 backdrop-blur-md transition-transform duration-500 ${isDownloadsOpen ? 'translate-y-0 scale-100' : '-translate-y-4 scale-95'}`}>
+            <div className={`bg-white/[0.05] border border-white/10 rounded-xl p-3 shadow-2xl relative z-50 backdrop-blur-2xl transition-transform duration-500 ${isDownloadsOpen ? 'translate-y-0 scale-100' : '-translate-y-4 scale-95'}`}>
               <span className="text-[9px] uppercase tracking-[0.15em] text-white/40 font-bold block mb-2 px-1">Downloads</span>
               {downloadState?.active?.length > 0 ? (
                 <div className="flex flex-col gap-2">

@@ -57,6 +57,7 @@
     "appId": "com.stero.musicplayer",
     "productName": "Stero",
     "npmRebuild": false,
+    "asar": false,
     "win": {
       "target": [
         "nsis",

@@ -13,12 +13,14 @@ import {
   ChevronDown,
   Pencil,
   Image as ImageIcon,
-  Disc
+  Disc,
+  CloudDownload
 } from 'lucide-react';
 import EditHeroModal from './EditHeroModal';
 
 const formatDuration = (seconds) => {
-  if (isNaN(seconds) || seconds === null) return '0:00';
+  if (typeof seconds === 'string' && seconds.includes(':')) return seconds;
+  if (!seconds || isNaN(seconds) || seconds === 0) return '-';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
@@ -28,6 +30,16 @@ const getMediaUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `media://local/?path=${encodeURIComponent(path)}`;
+};
+
+const getHighResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w512-h512');
 };
 
 export default function SongList() {
@@ -60,6 +72,7 @@ export default function SongList() {
   const [scrollParent, setScrollParent] = useState(null);
   
   const dropdownRef = useRef(null);
+  const isPlaylistMode = activeView === 'album-detail' || activeView === 'playlist-detail';
 
   useEffect(() => {
     // Find the nearest scrollable parent which is the main tag in App.jsx
@@ -118,7 +131,7 @@ export default function SongList() {
   } else if (customAlbum && customAlbum.cover_path) {
     viewArtwork = getMediaUrl(customAlbum.cover_path);
   } else if (firstWithArt) {
-    viewArtwork = getMediaUrl(firstWithArt.artwork_path);
+    viewArtwork = getHighResUrl(getMediaUrl(firstWithArt.artwork_path));
   }
 
   const totalPlaylistDuration = useMemo(() => rawSongsList.reduce((sum, s) => sum + (s.duration || 0), 0), [rawSongsList]);
@@ -199,10 +212,10 @@ export default function SongList() {
   }
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 select-none animate-fade-in relative items-start">
+    <div className="flex flex-row gap-6 lg:gap-8 select-none animate-fade-in relative items-start">
       {/* Merged Header Info Panel */}
       <div 
-        className="relative w-full xl:w-[35%] xl:sticky xl:top-0 overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col items-center xl:items-start gap-6 group transition-all duration-500 z-20"
+        className="relative w-[35%] max-w-[320px] min-w-[220px] sticky top-0 overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-5 lg:p-6 flex flex-col items-start gap-5 lg:gap-6 group transition-all duration-500 z-20"
         style={heroBgStyle}
       >
         
@@ -216,7 +229,7 @@ export default function SongList() {
 
         <div 
           onClick={handlePlayList}
-          className="relative z-10 w-48 h-48 md:w-64 md:h-64 xl:w-full xl:h-auto xl:aspect-square rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0 group/art cursor-pointer"
+          className="relative z-10 w-full aspect-square rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0 group/art cursor-pointer"
         >
           {viewArtwork ? (
             <img src={viewArtwork} alt={viewTitle} className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105" />
@@ -238,14 +251,14 @@ export default function SongList() {
           )}
         </div>
         
-        <div className="relative z-10 flex flex-col justify-end text-center xl:text-left w-full mb-1 flex-1">
+        <div className="relative z-10 flex flex-col justify-end text-left w-full mb-1 flex-1">
           <span className="text-[10px] uppercase font-medium tracking-widest text-white/60">{viewSubtitle}</span>
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight mt-1 mb-2 leading-tight line-clamp-2 break-words">{viewTitle}</h2>
+          <h2 className="text-2xl lg:text-3xl font-display font-bold text-white tracking-tight mt-1 mb-2 leading-tight line-clamp-2 break-words">{viewTitle}</h2>
           
-          <div className="flex flex-col xl:flex-col gap-4 mt-4 w-full">
+          <div className="flex flex-col gap-4 mt-4 w-full">
             <span className="text-sm text-gray-400 font-medium">{playlistStatsStr}</span>
             {rawSongsList.length > 0 && (
-              <div className="flex flex-wrap justify-center xl:justify-start gap-2 w-full">
+              <div className="flex flex-wrap justify-start gap-2 w-full">
                 <button
                   onClick={handlePlayList}
                   className="flex items-center gap-2 bg-white text-[#141416] hover:bg-white/95 px-6 py-2.5 rounded-full text-xs font-bold shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
@@ -287,7 +300,7 @@ export default function SongList() {
       </div>
 
       {/* Track List Table */}
-      <div className="w-full xl:w-[65%] rounded-2xl border border-white/10 bg-white/2 backdrop-blur-md overflow-hidden flex-1">
+      <div className="w-full flex-1 rounded-2xl border border-white/10 bg-white/2 backdrop-blur-md overflow-hidden min-w-[300px]">
         {sortedSongs.length === 0 ? (
           <div className="py-20 text-center text-sm text-gray-500 font-medium">
             {activeView === 'favorites' && !searchQuery
@@ -335,15 +348,21 @@ export default function SongList() {
                   <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('play_count')}>
                     Plays {renderSortIndicator('play_count')}
                   </th>
-                  <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('duration')}>
-                    <Clock size={12} className="inline mr-1" />
-                    {renderSortIndicator('duration')}
-                  </th>
+                  {!isPlaylistMode && (
+                    <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('duration')}>
+                      <Clock size={12} className="inline mr-1" />
+                      {renderSortIndicator('duration')}
+                    </th>
+                  )}
                   <th className="py-3.5 px-4 w-20 text-right"></th>
                 </tr>
               )}
               itemContent={(index, song) => {
-                const isCurrent = activeTrack && activeTrack.id === song.id;
+                const isCurrent = activeTrack && (
+                  activeTrack.id === song.id || 
+                  (activeTrack.videoId && song.filepath === `yt-stream://${activeTrack.videoId}`) ||
+                  (song.filepath && song.filepath.startsWith('yt-stream://') && activeTrack.filepath === song.filepath)
+                );
                 const isCurrentPlaying = isCurrent && isPlaying;
                 
                 return (
@@ -371,9 +390,9 @@ export default function SongList() {
                     <td className={`py-3 px-4 border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : ''}`} onClick={() => handleRowClick(song)}>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-md bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {song.has_artwork && song.artwork_path ? (
+                          {(song.has_artwork || !!(song.artwork_path || song.coverUrl || song.thumbnail)) && (song.artwork_path || song.coverUrl || song.thumbnail) ? (
                             <img 
-                              src={getMediaUrl(song.artwork_path)}
+                              src={getHighResUrl(getMediaUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
                               alt={song.title}
                               className="w-full h-full object-cover"
                             />
@@ -408,17 +427,20 @@ export default function SongList() {
 
                     {/* Plays */}
                     <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
-                      {song.play_count || 0}
+                      {song.play_count > 0 ? song.play_count : '-'}
                     </td>
 
-                    {/* Duration */}
+                  {/* Duration */}
+                  {!isPlaylistMode && (
                     <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
                       {formatDuration(song.duration)}
                     </td>
+                  )}
 
-                    {/* Favorite & Context action dropdown */}
-                    <td className={`py-3 px-4 text-right border-b border-white/0 rounded-r-xl ${isCurrent ? 'text-white' : ''}`} onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-3">
+                  {/* Favorite & Context action dropdown */}
+                  <td className={`py-3 px-4 text-right border-b border-white/0 rounded-r-xl ${isCurrent ? 'text-white' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-3">
+                      {!isPlaylistMode && (
                         <button 
                           onClick={() => toggleFavorite(song.id || song.videoId, undefined, song)}
                           className={`hover:scale-105 active:scale-95 transition-all ${
@@ -428,50 +450,51 @@ export default function SongList() {
                         >
                           <Heart size={14} fill={song.favorite ? 'currentColor' : 'none'} />
                         </button>
+                      )}
+                      
+                      <HoldToDeleteButton onComplete={() => deleteSong(song.id)} />
+                      
+                      <div className="relative">
+                        <button 
+                          onClick={() => setActiveMenuSongId(activeMenuSongId === song.id ? null : song.id)}
+                          className="text-gray-500 hover:text-white p-0.5 rounded-md hover:bg-white/5 transition-all"
+                        >
+                          <MoreVertical size={14} />
+                        </button>
                         
-                        <HoldToDeleteButton onComplete={() => deleteSong(song.id)} />
-                        
-                        <div className="relative">
-                          <button 
-                            onClick={() => setActiveMenuSongId(activeMenuSongId === song.id ? null : song.id)}
-                            className="text-gray-500 hover:text-white p-0.5 rounded-md hover:bg-white/5 transition-all"
+                        {activeMenuSongId === song.id && (
+                          <div 
+                            ref={dropdownRef}
+                            className={`absolute right-0 ${index < 3 && sortedSongs.length > 5 ? 'top-full mt-1' : 'bottom-full mb-1'} bg-[#1a1a1f]/95 backdrop-blur-xl border border-white/15 rounded-2xl w-44 py-2 z-[300] shadow-2xl flex flex-col items-stretch text-left animate-fade-in`}
                           >
-                            <MoreVertical size={14} />
-                          </button>
-                          
-                          {activeMenuSongId === song.id && (
-                            <div 
-                              ref={dropdownRef}
-                              className="absolute right-0 bottom-full mb-1 bg-[#1a1a1f]/95 backdrop-blur-xl border border-white/15 rounded-2xl w-44 py-2 z-[300] shadow-2xl flex flex-col items-stretch text-left animate-fade-in"
+                            <button
+                              onClick={() => {
+                                setEditingSong(song);
+                                setActiveMenuSongId(null);
+                              }}
+                              className="px-3.5 py-1.5 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-all text-left flex items-center gap-2"
                             >
+                              <Pencil size={11} />
+                              <span>Edit track info</span>
+                            </button>
+                            {song.filepath && song.filepath.startsWith('yt-stream://') && (
                               <button
                                 onClick={() => {
-                                  setEditingSong(song);
+                                  const videoId = song.filepath.replace('yt-stream://', '');
+                                  usePlayerStore.getState().startDownload({ ...song, videoId });
                                   setActiveMenuSongId(null);
                                 }}
                                 className="px-3.5 py-1.5 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-all text-left flex items-center gap-2"
                               >
-                                <Pencil size={11} />
-                                <span>Edit track info</span>
+                                <CloudDownload size={11} />
+                                <span>Download to library</span>
                               </button>
-                              {song.filepath && song.filepath.startsWith('yt-stream://') && (
-                                <button
-                                  onClick={() => {
-                                    const videoId = song.filepath.replace('yt-stream://', '');
-                                    usePlayerStore.getState().startDownload({ ...song, videoId });
-                                    setActiveMenuSongId(null);
-                                  }}
-                                  className="px-3.5 py-1.5 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-all text-left flex items-center gap-2"
-                                >
-                                  <CloudDownload size={11} />
-                                  <span>Download to library</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </td>
+                    </div>
+                  </td>
                   </>
                 );
               }}

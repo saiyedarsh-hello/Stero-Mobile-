@@ -10,6 +10,16 @@ const getMediaUrl = (path) => {
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
+const getHighResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+};
+
 export default function AlbumGrid() {
   const { 
     customAlbums, 
@@ -64,9 +74,9 @@ export default function AlbumGrid() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-white text-[#141416] hover:bg-white/90 px-5 py-2.5 rounded-full text-xs font-bold shadow-lg transition-all duration-300 active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white transition-all active:scale-95 bg-white/5 backdrop-blur-md border border-white/20 hover:bg-white/10"
           >
-            <Plus size={13} />
+            <Plus size={16} strokeWidth={2.5} />
             <span>Create Playlist</span>
           </button>
         </div>
@@ -109,13 +119,13 @@ export default function AlbumGrid() {
                   <div className="w-full aspect-square rounded-xl bg-white/5 flex items-center justify-center mb-3.5 shadow-md overflow-hidden border border-white/5 relative">
                     {album.cover_path ? (
                       <img
-                        src={getMediaUrl(album.cover_path)}
+                        src={getHighResUrl(getMediaUrl(album.cover_path))}
                         alt={album.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     ) : album.songs && album.songs[0]?.has_artwork && album.songs[0]?.artwork_path ? (
                       <img
-                        src={getMediaUrl(album.songs[0].artwork_path)}
+                        src={getHighResUrl(getMediaUrl(album.songs[0].artwork_path))}
                         alt={album.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />

@@ -97,16 +97,7 @@ export default function MusicSection() {
   
 
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center min-h-[50vh]">
-        <div className="flex flex-col items-center gap-4 animate-pulse">
-          <Disc size={40} className="text-white/20 animate-spin-slow" />
-          <span className="text-sm font-bold text-white/40 tracking-widest uppercase">Fetching Music...</span>
-        </div>
-      </div>
-    );
-  }
+
   let displayArtists = [];
   if (ytArtistSearchResults) {
     displayArtists = [...ytArtistSearchResults];

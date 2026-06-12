@@ -82,6 +82,15 @@ try {
       FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
     );
   `);
+  
+  // Cleanup corrupted stream records caused by previous bug
+  try {
+    db.prepare("DELETE FROM songs WHERE filepath = 'yt-stream://undefined'").run();
+    db.prepare("DELETE FROM songs WHERE filepath LIKE 'yt-stream://%' AND has_artwork = 0").run();
+  } catch (e) {
+    console.warn('Failed to cleanup corrupted records', e);
+  }
+
   console.log('Database initialized successfully with better-sqlite3 at:', dbPath);
 } catch (err) {
   console.warn('better-sqlite3 failed to load, falling back to JSON database:', err.message);
@@ -95,6 +104,15 @@ try {
       if (!jsonData.playlists) jsonData.playlists = [];
       if (!jsonData.customAlbums) jsonData.customAlbums = [];
       if (!jsonData.settings) jsonData.settings = {};
+      
+      // Cleanup corrupted stream records
+      const originalLength = jsonData.songs.length;
+      jsonData.songs = jsonData.songs.filter(s => {
+        if (s.filepath === 'yt-stream://undefined') return false;
+        if (s.filepath && s.filepath.startsWith('yt-stream://') && !s.has_artwork) return false;
+        return true;
+      });
+      if (jsonData.songs.length !== originalLength) saveJsonDb();
     } catch (readErr) {
       console.error('Error reading JSON database, initializing empty', readErr);
     }
@@ -203,7 +221,8 @@ function insertSongs(songsList) {
 }
 
 function addStreamSong(meta) {
-  const filepath = `yt-stream://${meta.videoId}`;
+  const filepath = `yt-stream://${meta.videoId || meta.id}`;
+  const coverUrl = meta.coverUrl || meta.thumbnail || meta.artwork_path || '';
   
   if (!useJsonFallback) {
     const existing = db.prepare('SELECT * FROM songs WHERE filepath = ?').get(filepath);
@@ -218,8 +237,8 @@ function addStreamSong(meta) {
       meta.artist, 
       meta.album || 'YouTube Music', 
       meta.duration || 0,
-      meta.coverUrl ? 1 : 0, 
-      meta.coverUrl || '', 
+      coverUrl ? 1 : 0, 
+      coverUrl, 
       Date.now()
     );
     return cleanSongs(db.prepare('SELECT * FROM songs WHERE id = ?').get(info.lastInsertRowid));
@@ -235,8 +254,8 @@ function addStreamSong(meta) {
       artist: meta.artist,
       album: meta.album || 'YouTube Music',
       duration: meta.duration || 0,
-      has_artwork: meta.coverUrl ? 1 : 0,
-      artwork_path: meta.coverUrl || '',
+      has_artwork: coverUrl ? 1 : 0,
+      artwork_path: coverUrl,
       added_at: Date.now(),
       play_count: 0,
       favorite: 0

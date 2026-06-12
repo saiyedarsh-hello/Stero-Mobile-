@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import WindowControls from './components/WindowControls';
 import MusicSection from './components/MusicSection';
-import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ColorWorker from './workers/colorWorker.js?worker&inline';
@@ -398,6 +398,14 @@ export default function App() {
                     placeholder={getSearchPlaceholder()}
                     className="select-text bg-transparent border-none outline-none w-full text-white placeholder-white/30 text-sm tracking-wide"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -441,7 +449,40 @@ export default function App() {
           {/* Scrollable Main Content */}
           <main ref={scrollWrapperRef} className="flex-1 overflow-y-auto px-8 py-6 pb-36 relative z-10">
             <div ref={scrollContentRef} className="w-full min-h-full relative">
-              <Suspense fallback={<div className="flex items-center justify-center w-full h-full min-h-[50vh] text-white/30 text-sm tracking-widest uppercase font-bold animate-pulse">Loading View...</div>}>
+              <Suspense fallback={
+                <div className="flex flex-col gap-10 w-full min-h-[50vh] animate-fade-in p-4 pt-2">
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-48 h-6 bg-white/5 rounded animate-pulse" />
+                      <div className="flex gap-2">
+                        <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" />
+                        <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="flex gap-6 overflow-hidden">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`skel-1-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44">
+                          <div className="w-44 h-56 rounded-2xl bg-white/5 animate-pulse" />
+                          <div className="flex flex-col gap-2 px-1">
+                            <div className="w-3/4 h-4 bg-white/5 rounded animate-pulse" />
+                            <div className="w-1/2 h-3 bg-white/5 rounded animate-pulse" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section>
+                    <div className="flex items-center justify-between mb-4 mt-4">
+                      <div className="w-32 h-6 bg-white/5 rounded animate-pulse" />
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={`skel-2-${i}`} className="w-full h-16 bg-white/5 rounded-2xl animate-pulse" />
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              }>
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeView}

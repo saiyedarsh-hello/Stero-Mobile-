@@ -80,6 +80,8 @@ export const usePlayerStore = create((set, get) => ({
   customAlbums: [],
   currentPlaylistSongs: [],
   
+  sessionRestored: false,
+
   // App Settings
   // App Settings
   appSettings: {},
@@ -274,18 +276,10 @@ export const usePlayerStore = create((set, get) => ({
     try {
       loadedSongs = await window.electron.getSongs() || [];
       set(state => {
-        const activeExists = loadedSongs.some(s => s.id === state.activeTrack?.id);
-        const filteredQueue = state.queue.filter(qSong => loadedSongs.some(s => s.id === qSong.id));
-        const newQueueIndex = state.activeTrack && activeExists 
-          ? filteredQueue.findIndex(s => s.id === state.activeTrack.id) 
-          : -1;
-
+        // Only update the library songs. We deliberately do not touch queue, activeTrack, or isPlaying 
+        // to ensure that adding or deleting library songs doesn't interrupt the active playback session.
         return { 
-          songs: loadedSongs,
-          queue: filteredQueue,
-          queueIndex: newQueueIndex,
-          activeTrack: activeExists ? state.activeTrack : null,
-          isPlaying: activeExists ? state.isPlaying : false
+          songs: loadedSongs
         };
       });
     } catch (err) {
@@ -314,7 +308,10 @@ export const usePlayerStore = create((set, get) => ({
     }
 
     // Restore last session after songs are loaded
-    get().restoreSession(loadedSongs || []);
+    if (!get().sessionRestored) {
+      get().restoreSession(loadedSongs || []);
+      set({ sessionRestored: true });
+    }
   },
 
   updateAppSetting: async (key, value) => {
@@ -455,26 +452,16 @@ export const usePlayerStore = create((set, get) => ({
 
   createCustomAlbum: async (name, coverPath, songIds) => {
     try {
-      let newAlbum;
       if (window.electron) {
-        newAlbum = await window.electron.createCustomAlbum(name, coverPath, songIds);
+        await window.electron.createCustomAlbum(name, coverPath, songIds);
+        const customAlbums = await window.electron.getCustomAlbums() || [];
+        set({ customAlbums });
+        get().fetchLibrary(); // refresh songs map as well
       } else {
         // mock mode
-        newAlbum = { id: Date.now(), name, cover_path: coverPath, created_at: Date.now(), songs: [] };
+        const newAlbum = { id: Date.now(), name, cover_path: coverPath, created_at: Date.now(), songs: [] };
+        set(state => ({ customAlbums: [...state.customAlbums, newAlbum] }));
       }
-      if (!newAlbum) return;
-      // Patch songs in store to show new album name
-      const patchSong = (s) => songIds.includes(s.id) ? { ...s, album: name } : s;
-      set(state => ({
-        customAlbums: [...state.customAlbums, { ...newAlbum, songs: state.songs.filter(s => songIds.includes(s.id)) }],
-        songs: state.songs.map(patchSong),
-        queue: state.queue.map(patchSong),
-        currentPlaylistSongs: state.currentPlaylistSongs.map(patchSong),
-        activeTrack: state.activeTrack && songIds.includes(state.activeTrack.id)
-          ? { ...state.activeTrack, album: name }
-          : state.activeTrack
-      }));
-      return newAlbum;
     } catch (err) {
       console.error('Failed to create custom album:', err);
     }
@@ -487,52 +474,20 @@ export const usePlayerStore = create((set, get) => ({
         return null;
       }
 
-      let updatedAlbum;
       if (window.electron && window.electron.updateCustomAlbum) {
-        updatedAlbum = await window.electron.updateCustomAlbum(albumId, name, coverPath, songIds);
+        await window.electron.updateCustomAlbum(albumId, name, coverPath, songIds);
+        const customAlbums = await window.electron.getCustomAlbums() || [];
+        set({ customAlbums });
+        get().fetchLibrary(); // refresh songs map
       } else {
-        updatedAlbum = { id: albumId, name, cover_path: coverPath };
+        set(state => ({
+          customAlbums: state.customAlbums.map(album => 
+            album.id === albumId ? { ...album, name, cover_path: coverPath } : album
+          )
+        }));
       }
-
-      set(state => {
-        const oldAlbum = state.customAlbums.find(a => a.id === albumId);
-        const oldName = oldAlbum ? oldAlbum.name : name;
-
-        const updatedCustomAlbums = state.customAlbums.map(album => {
-          if (album.id === albumId) {
-            return {
-              ...album,
-              name,
-              cover_path: coverPath,
-              songs: state.songs.filter(s => songIds.includes(s.id))
-            };
-          }
-          return album;
-        });
-
-        const patchSong = (s) => {
-          if (songIds.includes(s.id)) return { ...s, album: name };
-          if (s.album === oldName) return { ...s, album: 'Unknown' };
-          return s;
-        };
-
-        return {
-          customAlbums: updatedCustomAlbums,
-          songs: state.songs.map(patchSong),
-          queue: state.queue.map(patchSong),
-          currentPlaylistSongs: state.currentPlaylistSongs.map(patchSong),
-          activeTrack: state.activeTrack ? patchSong(state.activeTrack) : null,
-          selectedAlbumName: state.selectedAlbumId === albumId ? name : state.selectedAlbumName
-        };
-      });
-
-      return updatedAlbum;
     } catch (err) {
-      console.error('Failed to update custom album:', err);
-    } finally {
-      if (window.electron) {
-        get().fetchLibrary();
-      }
+      console.error('Failed to update album:', err);
     }
   },
 
@@ -652,31 +607,71 @@ export const usePlayerStore = create((set, get) => ({
     if (!window.electron) return;
     
     // Map the incoming youtube track list to standard track objects so the queue and visualizer work perfectly
-    const mappedList = trackList.map(t => ({
-      id: t.videoId || t.id,
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      artwork_path: t.coverUrl || t.thumbnail || t.artwork_path,
-      has_artwork: !!(t.coverUrl || t.thumbnail || t.artwork_path),
-      isStream: true,
-      filepath: t.filepath || '',
-      duration: t.duration || 0
-    }));
+    const mappedList = trackList.map(t => {
+      const isYtStream = t.filepath && typeof t.filepath === 'string' && t.filepath.startsWith('yt-stream://');
+      const extractedVideoId = isYtStream ? t.filepath.replace('yt-stream://', '') : t.videoId;
+      const vId = extractedVideoId || (typeof t.id === 'string' ? t.id : null);
+      
+      let isFav = t.favorite;
+      if (isFav === undefined && vId) {
+        const dbMatch = get().songs.find(s => s.filepath === `yt-stream://${vId}`);
+        if (dbMatch) isFav = dbMatch.favorite;
+      }
+
+      return {
+        ...t,
+        id: vId || t.id,
+        videoId: vId,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        artwork_path: t.coverUrl || t.thumbnail || t.artwork_path,
+        has_artwork: !!(t.coverUrl || t.thumbnail || t.artwork_path || t.has_artwork),
+        isStream: isYtStream,
+        filepath: isYtStream ? '' : (t.filepath || ''),
+        duration: t.duration || 0,
+        favorite: isFav
+      };
+    });
 
     // Find the current track in the mapped list, or fallback to standalone
-    const tempTrack = mappedList.find(t => t.id === (songMeta.videoId || songMeta.id)) || {
+    let tempTrack = mappedList.find(t => t.id === (songMeta.videoId || songMeta.id) || t.videoId === (songMeta.videoId || songMeta.id)) || {
+      ...songMeta,
       id: songMeta.videoId || songMeta.id,
       title: songMeta.title,
       artist: songMeta.artist,
       album: songMeta.album,
       artwork_path: songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path,
-      has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path),
+      has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path || songMeta.has_artwork),
       isStream: true,
-      filepath: songMeta.filepath || '',
-      duration: songMeta.duration || 0
+      filepath: (songMeta.filepath && typeof songMeta.filepath === 'string' && songMeta.filepath.startsWith('yt-stream://')) ? '' : (songMeta.filepath || ''),
+      duration: songMeta.duration || 0,
+      favorite: songMeta.favorite !== undefined ? songMeta.favorite : (() => {
+        const vId = songMeta.videoId || (typeof songMeta.id === 'string' ? songMeta.id : null);
+        if (vId) {
+          const dbMatch = get().songs.find(s => s.filepath === `yt-stream://${vId}`);
+          return dbMatch ? dbMatch.favorite : 0;
+        }
+        return 0;
+      })()
     };
     
+    // Auto-save the stream to DB so we can track plays and favorites
+    if (window.electron && (!tempTrack.id || typeof tempTrack.id === 'string')) {
+      try {
+        const savedTrack = await window.electron.addStreamSongToDb(tempTrack);
+        if (savedTrack && savedTrack.id) {
+          tempTrack = { ...tempTrack, id: savedTrack.id };
+          set(state => {
+             const exists = state.songs.find(s => s.id === savedTrack.id);
+             return exists ? state : { songs: [...state.songs, savedTrack] };
+          });
+        }
+      } catch (err) {
+        console.error('Failed to auto-save stream song', err);
+      }
+    }
+
     get().addToHistory(tempTrack);
 
     // Play immediately to show UI (will be silent/buffering until URL is fetched)
@@ -750,9 +745,14 @@ export const usePlayerStore = create((set, get) => ({
     if (window.electron) {
       window.electron.incrementPlayCount(track.id);
     }
-    set(state => ({
-      songs: state.songs.map(s => s.id === track.id ? { ...s, play_count: (s.play_count || 0) + 1 } : s)
-    }));
+    set(state => {
+      const isMatch = (s) => s.id === track.id || (s.videoId && track.videoId && s.videoId === track.videoId) || (s.videoId && typeof track.id === 'string' && s.videoId === track.id);
+      return {
+        songs: state.songs.map(s => isMatch(s) ? { ...s, play_count: (s.play_count || 0) + 1 } : s),
+        ytSearchResults: state.ytSearchResults ? state.ytSearchResults.map(s => isMatch(s) ? { ...s, play_count: (s.play_count || 0) + 1 } : s) : null,
+        trendingSongs: state.trendingSongs.map(s => isMatch(s) ? { ...s, play_count: (s.play_count || 0) + 1 } : s)
+      };
+    });
 
     setTimeout(() => {
       get().preloadNextTrack();
@@ -944,6 +944,14 @@ export const usePlayerStore = create((set, get) => ({
       }
     }
 
+    // If it has a string ID but is actually already in the DB, switch to its numeric ID
+    if (typeof songId === 'string') {
+      const dbMatch = get().songs.find(s => s.filepath === `yt-stream://${songId}`);
+      if (dbMatch) {
+        songId = dbMatch.id;
+      }
+    }
+
     // Handle ephemeral streaming tracks that aren't in the DB yet
     if (typeof songId === 'string') {
       const trackMeta = trackObj || (get().activeTrack?.id === songId ? get().activeTrack : null) || (get().activeTrack?.videoId === songId ? get().activeTrack : null);
@@ -953,23 +961,25 @@ export const usePlayerStore = create((set, get) => ({
         const newDbSong = await window.electron.addStreamSongToDb(trackMeta);
         await window.electron.toggleFavorite(newDbSong.id, favoriteStatus);
         
-        const updateQueueSong = (s) => (s.id === songId || s.videoId === songId) ? { ...s, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus } : s;
+        const updateQueueSong = (s) => (s.id === songId || s.videoId === songId) ? { ...s, id: songId, favorite: favoriteStatus } : s; // Keep string ID in queue so playback indexing stays robust, just update favorite
         
-        // Update active track with its new real integer ID if it's currently playing
+        // Update active track and optimistically add to songs list without fetching library to prevent flicker
+        const songWithFav = { ...newDbSong, favorite: favoriteStatus };
         if (get().activeTrack?.id === songId || get().activeTrack?.videoId === songId) {
           set(state => ({ 
-            activeTrack: { ...state.activeTrack, id: newDbSong.id, filepath: newDbSong.filepath, favorite: favoriteStatus },
+            songs: [...state.songs, songWithFav],
+            activeTrack: { ...state.activeTrack, favorite: favoriteStatus },
             queue: state.queue.map(updateQueueSong),
             currentPlaylistSongs: state.currentPlaylistSongs.map(updateQueueSong)
           }));
         } else {
           set(state => ({ 
+            songs: [...state.songs, songWithFav],
             queue: state.queue.map(updateQueueSong),
             currentPlaylistSongs: state.currentPlaylistSongs.map(updateQueueSong)
           }));
         }
-        
-        await get().fetchLibrary();
+
       } catch (err) {
         console.error("Failed to favorite stream track:", err);
       }
