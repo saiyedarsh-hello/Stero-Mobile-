@@ -458,6 +458,18 @@ ipcMain.handle('yt-cancel-download', (event, videoId) => {
   return true;
 });
 
+ipcMain.handle('yt-clear-completed-download', (event, videoId) => {
+  downloader.completed = downloader.completed.filter(c => c.videoId !== videoId);
+  downloader.broadcastState();
+  return true;
+});
+
+ipcMain.handle('yt-clear-all-completed-downloads', () => {
+  downloader.completed = [];
+  downloader.broadcastState();
+  return true;
+});
+
 ipcMain.handle('db-get-songs', () => {
   return db.getAllSongs();
 });

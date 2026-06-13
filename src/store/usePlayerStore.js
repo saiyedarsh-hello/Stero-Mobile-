@@ -205,6 +205,16 @@ export const usePlayerStore = create((set, get) => ({
     return await window.electron.ytCancelDownload(videoId);
   },
 
+  clearCompletedDownload: async (videoId) => {
+    if (!window.electron) return { success: false, message: 'Electron not available' };
+    return await window.electron.ytClearCompletedDownload(videoId);
+  },
+
+  clearAllCompletedDownloads: async () => {
+    if (!window.electron) return { success: false, message: 'Electron not available' };
+    return await window.electron.ytClearAllCompletedDownloads();
+  },
+
   deleteSong: async (songId) => {
     if (!window.electron) return;
     await window.electron.deleteSong(songId);

@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electron', {
   ytDownload: (songMeta) => ipcRenderer.invoke('yt-download', songMeta),
   ytGetQueue: () => ipcRenderer.invoke('yt-get-queue'),
   ytCancelDownload: (videoId) => ipcRenderer.invoke('yt-cancel-download', videoId),
+  ytClearCompletedDownload: (videoId) => ipcRenderer.invoke('yt-clear-completed-download', videoId),
+  ytClearAllCompletedDownloads: () => ipcRenderer.invoke('yt-clear-all-completed-downloads'),
   onDownloadProgress: (callback) => {
     const subscription = (event, data) => callback(data);
     ipcRenderer.on('download-queue-updated', subscription);
