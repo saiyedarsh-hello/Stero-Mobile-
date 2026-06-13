@@ -401,19 +401,22 @@ export default function PlayerBar() {
   const lastErrorRef = useRef(0);
 
   const handleError = (e) => {
+    const state = usePlayerStore.getState();
+    // If there is no active track, ignore any audio element source errors on mount
+    if (!state.activeTrack) return;
+
     console.error('Audio playback error:', e);
 
     // Debounce: prevent rapid auto-skipping if multiple tracks fail in a row
     const now = Date.now();
     if (now - lastErrorRef.current < 3000) {
       console.warn('Playback error throttled — stopping to prevent infinite skip loop');
-      usePlayerStore.getState().togglePlay(); // Just stop playback
+      state.togglePlay(); // Just stop playback
       return;
     }
     lastErrorRef.current = now;
 
     // Gracefully skip to the next track if the current track file becomes unavailable (e.g. deleted)
-    const state = usePlayerStore.getState();
     if (state.queue && state.queue.length > 1) {
       state.nextTrack();
     } else {
