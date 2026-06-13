@@ -14,7 +14,9 @@ import {
   Pencil,
   Image as ImageIcon,
   Disc,
-  CloudDownload
+  CloudDownload,
+  ListMusic,
+  Search
 } from 'lucide-react';
 import EditHeroModal from './EditHeroModal';
 
@@ -97,7 +99,7 @@ export default function SongList() {
     let viewSubtitle = 'Library';
 
     if (activeView === 'songs') {
-      rawSongsList = songs;
+      rawSongsList = songs.filter(s => s.filepath && !s.filepath.startsWith('yt-stream://'));
       viewTitle = appSettings?.dashboard_title || 'music';
       viewSubtitle = 'Library';
     } else if (activeView === 'favorites') {
@@ -134,7 +136,18 @@ export default function SongList() {
     viewArtwork = getHighResUrl(getMediaUrl(firstWithArt.artwork_path));
   }
 
-  const totalPlaylistDuration = useMemo(() => rawSongsList.reduce((sum, s) => sum + (s.duration || 0), 0), [rawSongsList]);
+  const totalPlaylistDuration = useMemo(() => rawSongsList.reduce((sum, s) => {
+    let dur = s.duration || 0;
+    if (typeof dur === 'string' && dur.includes(':')) {
+      const parts = dur.split(':').map(Number);
+      if (parts.length === 2) dur = parts[0] * 60 + parts[1];
+      else if (parts.length === 3) dur = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      else dur = parseFloat(dur) || 0;
+    } else {
+      dur = parseFloat(dur) || 0;
+    }
+    return sum + dur;
+  }, 0), [rawSongsList]);
   const totalMins = Math.floor(totalPlaylistDuration / 60);
   const totalSecs = Math.floor(totalPlaylistDuration % 60);
   const playlistStatsStr = `${rawSongsList.length} track${rawSongsList.length !== 1 ? 's' : ''} • ${totalMins}m ${totalSecs}s`;
@@ -212,7 +225,7 @@ export default function SongList() {
   }
 
   return (
-    <div className="flex flex-row gap-6 lg:gap-8 select-none animate-fade-in relative items-start">
+    <div className={`flex flex-row gap-6 lg:gap-8 select-none animate-fade-in relative ${sortedSongs.length === 0 ? 'items-stretch' : 'items-start'}`}>
       {/* Merged Header Info Panel */}
       <div 
         className="relative w-[35%] max-w-[320px] min-w-[220px] sticky top-0 overflow-hidden rounded-3xl backdrop-blur-2xl border border-white/10 shadow-2xl p-5 lg:p-6 flex flex-col items-start gap-5 lg:gap-6 group transition-all duration-500 z-20"
@@ -222,8 +235,8 @@ export default function SongList() {
         {/* Glow ambient background elements for 'songs' view */}
         {activeView === 'songs' && (
           <>
-            <div className="absolute top-0 right-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ backgroundColor: dominantColor ? `hsla(${dominantColor.h}, ${dominantColor.s}%, 60%, 0.2)` : 'rgba(168, 85, 247, 0.1)' }} />
-            <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ backgroundColor: dominantColor ? `hsla(${(dominantColor.h + 60) % 360}, ${dominantColor.s}%, 50%, 0.15)` : 'rgba(6, 182, 212, 0.05)' }} />
+            <div className="absolute top-0 right-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none" style={{ backgroundColor: dominantColor ? `hsla(${dominantColor.h}, ${dominantColor.s}%, 60%, 0.2)` : 'rgba(168, 85, 247, 0.1)' }} />
+            <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-[100px] pointer-events-none" style={{ backgroundColor: dominantColor ? `hsla(${(dominantColor.h + 60) % 360}, ${dominantColor.s}%, 50%, 0.15)` : 'rgba(6, 182, 212, 0.05)' }} />
           </>
         )}
 
@@ -234,7 +247,20 @@ export default function SongList() {
           {viewArtwork ? (
             <img src={viewArtwork} alt={viewTitle} className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105" />
           ) : (
-            <Music size={54} className="text-white" />
+            <div className="w-full h-full flex flex-col items-center justify-center group-hover/art:scale-105 transition-transform duration-700 relative overflow-hidden bg-gradient-to-br from-white/[0.08] to-transparent shadow-inner">
+              {/* Dynamic Icon based on View */}
+              <div className="relative z-10 drop-shadow-xl transform transition-transform duration-500 group-hover/art:scale-110">
+                {activeView === 'favorites' ? (
+                  <Heart size={64} className="text-white/40" strokeWidth={1.5} />
+                ) : activeView === 'songs' ? (
+                  <ListMusic size={64} className="text-white/40" strokeWidth={1.5} />
+                ) : activeView === 'album-detail' ? (
+                  <Disc size={64} className="text-white/40" strokeWidth={1.5} />
+                ) : (
+                  <Music size={64} className="text-white/40" strokeWidth={1.5} />
+                )}
+              </div>
+            </div>
           )}
           {rawSongsList.length > 0 && (
             <div className={`absolute inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center transition-all duration-300 ${
@@ -257,8 +283,8 @@ export default function SongList() {
           
           <div className="flex flex-col gap-4 mt-4 w-full">
             <span className="text-sm text-gray-400 font-medium">{playlistStatsStr}</span>
-            {rawSongsList.length > 0 && (
-              <div className="flex flex-wrap justify-start gap-2 w-full">
+            <div className="flex flex-wrap justify-start gap-2 w-full">
+              {rawSongsList.length > 0 && (
                 <button
                   onClick={handlePlayList}
                   className="flex items-center gap-2 bg-white text-[#141416] hover:bg-white/95 px-6 py-2.5 rounded-full text-xs font-bold shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
@@ -275,26 +301,26 @@ export default function SongList() {
                     </>
                   )}
                 </button>
-                {activeView === 'songs' && (
-                  <button
-                    onClick={() => setIsEditingHero(true)}
-                    className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
-                  >
-                    <ImageIcon size={12} />
-                    <span>Edit Banner</span>
-                  </button>
-                )}
-                {activeView === 'album-detail' && selectedAlbumId && (
-                  <button
-                    onClick={() => setEditingPlaylist(customAlbum)}
-                    className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
-                  >
-                    <Pencil size={12} />
-                    <span>Edit</span>
-                  </button>
-                )}
-              </div>
-            )}
+              )}
+              {activeView === 'songs' && (
+                <button
+                  onClick={() => setIsEditingHero(true)}
+                  className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
+                >
+                  <ImageIcon size={12} />
+                  <span>Edit Banner</span>
+                </button>
+              )}
+              {activeView === 'album-detail' && selectedAlbumId && (
+                <button
+                  onClick={() => setEditingPlaylist(customAlbum)}
+                  className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
+                >
+                  <Pencil size={12} />
+                  <span>Edit</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -302,10 +328,29 @@ export default function SongList() {
       {/* Track List Table */}
       <div className="w-full flex-1 rounded-2xl border border-white/10 bg-white/2 backdrop-blur-md overflow-hidden min-w-[300px]">
         {sortedSongs.length === 0 ? (
-          <div className="py-20 text-center text-sm text-gray-500 font-medium">
-            {activeView === 'favorites' && !searchQuery
-              ? 'You have not liked any songs'
-              : 'No tracks match your search filter.'}
+          <div className="w-full py-28 lg:py-36 flex flex-col items-center justify-center px-8 relative overflow-hidden group">
+            
+            <Search size={42} className="text-white/20 mb-6" />
+            
+            <h3 className="relative z-10 text-2xl lg:text-3xl font-display font-bold text-white mb-4 text-center tracking-tight">
+              {searchQuery 
+                ? 'No tracks found' 
+                : activeView === 'favorites' 
+                  ? 'No favorites yet'
+                  : activeView === 'album-detail' || activeView === 'playlist-detail'
+                    ? 'Let\'s build your playlist'
+                    : 'Your library is empty'}
+            </h3>
+            
+            <p className="relative z-10 text-sm lg:text-base text-gray-400 font-medium max-w-[400px] text-center leading-relaxed">
+              {searchQuery
+                ? `We couldn't find anything matching "${searchQuery}". Try a different search term.`
+                : activeView === 'favorites'
+                  ? 'Tap the heart icon on any track to add it to your favorites collection.'
+                  : activeView === 'album-detail' || activeView === 'playlist-detail'
+                    ? 'Search for your favorite artists and songs to add them to this playlist.'
+                    : 'Search for your favorite artists and songs to start building your collection.'}
+            </p>
           </div>
         ) : (
           scrollParent && (
@@ -339,17 +384,17 @@ export default function SongList() {
                   <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('title')}>
                     Title {renderSortIndicator('title')}
                   </th>
-                  <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('artist')}>
+                  <th className="py-3.5 px-4 cursor-pointer hover:text-white hidden md:table-cell" onClick={() => handleSort('artist')}>
                     Artist {renderSortIndicator('artist')}
                   </th>
-                  <th className="py-3.5 px-4 cursor-pointer hover:text-white" onClick={() => handleSort('album')}>
+                  <th className="py-3.5 px-4 cursor-pointer hover:text-white hidden lg:table-cell" onClick={() => handleSort('album')}>
                     Playlist {renderSortIndicator('album')}
                   </th>
-                  <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('play_count')}>
+                  <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white hidden sm:table-cell" onClick={() => handleSort('play_count')}>
                     Plays {renderSortIndicator('play_count')}
                   </th>
                   {!isPlaylistMode && (
-                    <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white" onClick={() => handleSort('duration')}>
+                    <th className="py-3.5 px-4 w-20 text-center cursor-pointer hover:text-white hidden sm:table-cell" onClick={() => handleSort('duration')}>
                       <Clock size={12} className="inline mr-1" />
                       {renderSortIndicator('duration')}
                     </th>
@@ -408,12 +453,12 @@ export default function SongList() {
                     </td>
 
                     {/* Artist */}
-                    <td className={`py-3 px-4 text-xs font-medium truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
+                    <td className={`py-3 px-4 text-xs font-medium truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer hidden md:table-cell ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
                       {song.artist}
                     </td>
 
                     {/* Playlist */}
-                    <td className={`py-3 px-4 text-xs font-normal truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
+                    <td className={`py-3 px-4 text-xs font-normal truncate max-w-[100px] md:max-w-[150px] border-b border-white/0 cursor-pointer hidden lg:table-cell ${isCurrent ? 'text-white' : 'text-gray-300'}`} onClick={() => handleRowClick(song)}>
                       <span 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -426,13 +471,13 @@ export default function SongList() {
                     </td>
 
                     {/* Plays */}
-                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
+                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer hidden sm:table-cell ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
                       {song.play_count > 0 ? song.play_count : '-'}
                     </td>
 
                   {/* Duration */}
                   {!isPlaylistMode && (
-                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
+                    <td className={`py-3 px-4 font-display text-xs text-center font-medium border-b border-white/0 cursor-pointer hidden sm:table-cell ${isCurrent ? 'text-white' : 'text-gray-400'}`} onClick={() => handleRowClick(song)}>
                       {formatDuration(song.duration)}
                     </td>
                   )}

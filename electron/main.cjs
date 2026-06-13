@@ -10,6 +10,12 @@ const Downloader = require('./downloader.cjs');
 // Initialize downloader
 const downloader = new Downloader(db);
 
+// Set app name and AppUserModelId so Windows SMTC media widget shows "Stero" instead of "Unknown app"
+app.name = 'Stero';
+if (process.platform === 'win32') {
+  app.setAppUserModelId('Stero');
+}
+
 // Register media protocol before app is ready
 protocol.registerSchemesAsPrivileged([
   {
@@ -47,6 +53,7 @@ function createWindow() {
     titleBarStyle: 'hidden',
     autoHideMenuBar: true,
     title: 'Stero',
+    icon: path.join(__dirname, '../public/icon.ico'),
     transparent: false,
     backgroundColor: '#0B0D14', // matching app background
     webPreferences: {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { X } from 'lucide-react';
 
@@ -23,11 +23,14 @@ export default function Visualizer() {
     dominantColor
   } = usePlayerStore();
 
+  const [discClicks, setDiscClicks] = useState(0);
+
   const isActive = activeView === 'visualizer';
 
   // Handle Close
   const handleClose = () => {
     setActiveView('music');
+    setTimeout(() => setDiscClicks(0), 700); // reset after fade out
   };
 
   // Keyboard escape
@@ -105,32 +108,44 @@ export default function Visualizer() {
           </div>
 
           {/* Vinyl Record */}
-          <div className={`relative w-full h-full rounded-full shadow-[25px_0_70px_rgba(0,0,0,0.15)] bg-[#111] overflow-hidden ${isPlaying ? 'animate-spin-slow' : ''}`} style={{ animationDuration: '6s', animationTimingFunction: 'linear' }}>
+          <div 
+            onClick={() => setDiscClicks(prev => prev + 1)}
+            className={`relative w-full h-full rounded-full shadow-[25px_0_70px_rgba(0,0,0,0.15)] overflow-hidden cursor-pointer transition-all duration-1000 active:scale-[0.98] pointer-events-auto ${isPlaying ? 'animate-spin-slow' : ''} ${discClicks >= 10 ? 'bg-[#3b2a09]' : 'bg-[#111]'}`} 
+            style={{ animationDuration: '6s', animationTimingFunction: 'linear' }}
+          >
             {/* Vinyl Grooves */}
-            <div className="absolute inset-0 rounded-full" style={{
-              background: 'repeating-radial-gradient(circle at center, #111, #111 2px, #181818 3px, #111 4px)'
+            <div className="absolute inset-0 rounded-full transition-all duration-1000" style={{
+              background: discClicks >= 10 
+                ? 'repeating-radial-gradient(circle at center, rgba(133, 96, 20, 0.8), rgba(133, 96, 20, 0.8) 2px, rgba(43, 30, 3, 0.9) 3px, rgba(133, 96, 20, 0.8) 4px)'
+                : 'repeating-radial-gradient(circle at center, #111, #111 2px, #181818 3px, #111 4px)'
             }} />
-            {/* Light reflection sheen */}
-            <div className="absolute inset-0 rounded-full opacity-30 mix-blend-screen" style={{
+            
+            {/* Inner Golden Ring Detail */}
+            {discClicks >= 10 && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[38%] h-[38%] rounded-full border border-[#ffe066]/30 shadow-[0_0_10px_rgba(200,150,30,0.5)] pointer-events-none transition-opacity duration-1000 opacity-100 animate-pulse" />
+            )}
+
+            {/* Light reflection sheen (Enhanced for gold) */}
+            <div className={`absolute inset-0 rounded-full mix-blend-screen transition-opacity duration-1000 ${discClicks >= 10 ? 'opacity-50' : 'opacity-30'}`} style={{
               background: 'conic-gradient(from 45deg, transparent 0deg, rgba(255,255,255,0.4) 45deg, transparent 90deg, rgba(255,255,255,0.4) 135deg, transparent 180deg, rgba(255,255,255,0.4) 225deg, transparent 270deg, rgba(255,255,255,0.4) 315deg, transparent 360deg)'
             }} />
             
-            {/* Center Label (Off-white) */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[35%] h-[35%] rounded-full bg-[#f4f4f2] shadow-[inset_0_0_25px_rgba(0,0,0,0.08)] flex items-center justify-center">
+            {/* Center Label (Off-white or matching gold) */}
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[35%] h-[35%] rounded-full shadow-[inset_0_0_25px_rgba(0,0,0,0.08)] flex items-center justify-center transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#33260d]' : 'bg-[#f4f4f2]'}`}>
               {/* Spindle hole */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#f4f4f2] shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] border-[3px] border-[#e0e0e0]" />
+              <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] border-[3px] transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#33260d] border-[#d4af37]' : 'bg-[#f4f4f2] border-[#e0e0e0]'}`} />
               
-              {/* Minimal Red Logo on left side of label */}
+              {/* Minimal Logo on left side of label */}
               <div className="absolute left-[15%] top-1/2 -translate-y-1/2 flex items-end gap-[3px]">
-                <div className="w-[3px] h-4 bg-[#a33333]" />
-                <div className="w-[3px] h-7 bg-[#a33333]" />
-                <div className="w-[3px] h-5 bg-[#a33333]" />
-                <div className="w-[3px] h-3 bg-[#a33333]" />
+                <div className={`w-[3px] h-4 transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#d4af37]' : 'bg-[#a33333]'}`} />
+                <div className={`w-[3px] h-7 transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#d4af37]' : 'bg-[#a33333]'}`} />
+                <div className={`w-[3px] h-5 transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#d4af37]' : 'bg-[#a33333]'}`} />
+                <div className={`w-[3px] h-3 transition-colors duration-1000 ${discClicks >= 10 ? 'bg-[#d4af37]' : 'bg-[#a33333]'}`} />
               </div>
 
               {/* Track Info on right side of label */}
               <div className="absolute right-[12%] top-1/2 -translate-y-1/2 text-right">
-                <span className="text-[11px] font-bold tracking-[0.1em] text-[#111] uppercase block max-w-[140px] truncate">
+                <span className={`text-[11px] font-bold tracking-[0.1em] uppercase block max-w-[140px] truncate transition-colors duration-1000 ${discClicks >= 10 ? 'text-[#d4af37]' : 'text-[#111]'}`}>
                   {trackIndex}. {title}
                 </span>
               </div>

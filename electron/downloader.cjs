@@ -28,6 +28,115 @@ class Downloader {
     
     // Will be set when a renderer connects to receive progress
     this.webContents = null;
+
+    // Start local streaming proxy for audio chunking
+    this.proxyPort = 8998;
+    this.proxyServer = require('http').createServer((req, res) => this.handleStreamProxy(req, res));
+    this.proxyServer.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[Streaming Proxy] Port ${this.proxyPort} in use, trying ${this.proxyPort + 1}`);
+        this.proxyPort++;
+        this.proxyServer.listen(this.proxyPort, '127.0.0.1');
+      }
+    });
+    this.proxyServer.listen(this.proxyPort, '127.0.0.1', () => {
+      console.log(`[Streaming Proxy] Listening on http://127.0.0.1:${this.proxyPort}`);
+    });
+  }
+
+  handleStreamProxy(req, res) {
+    const urlParts = new URL(req.url, `http://${req.headers.host}`);
+    if (urlParts.pathname !== '/stream') {
+      res.writeHead(404);
+      return res.end();
+    }
+    
+    const videoId = urlParts.searchParams.get('videoId');
+    if (!videoId) {
+      res.writeHead(400);
+      return res.end('Missing videoId');
+    }
+
+    // First, resolve the direct URL using yt-dlp -g
+    const ytDlpPath = path.join(process.env.YOUTUBE_DL_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    const args = [
+      targetUrl,
+      '--format', '140/m4a/bestaudio',
+      '-g',
+      '--no-warnings',
+      '--no-playlist',
+      '--no-check-formats',
+      '--no-check-certificates'
+    ];
+
+    const { execFile } = require('child_process');
+    execFile(ytDlpPath, args, (error, stdout, stderr) => {
+      if (error) {
+        console.error('[Streaming Proxy] Failed to get URL:', error);
+        if (!res.headersSent) {
+          res.writeHead(500);
+          res.end('Internal Server Error');
+        }
+        return;
+      }
+
+      const directUrl = stdout.trim();
+      if (!directUrl || !directUrl.startsWith('http')) {
+        if (!res.headersSent) {
+          res.writeHead(500);
+          res.end('Invalid URL from extractor');
+        }
+        return;
+      }
+
+      // Pipe the audio data through the proxy, supporting Range requests for seeking
+      const https = require('https');
+      
+      const proxyOptions = {};
+      if (req.headers.range) {
+        proxyOptions.headers = {
+          'Range': req.headers.range
+        };
+      }
+
+      const proxyReq = https.get(directUrl, proxyOptions, (proxyRes) => {
+        if (proxyRes.statusCode !== 200 && proxyRes.statusCode !== 206) {
+          console.error('[Streaming Proxy] Upstream returned:', proxyRes.statusCode);
+          if (!res.headersSent) {
+            res.writeHead(proxyRes.statusCode || 502);
+            res.end('Upstream error');
+          }
+          return;
+        }
+
+        const headers = {
+          'Access-Control-Allow-Origin': '*',
+          'Accept-Ranges': 'bytes',
+          'Connection': 'close'
+        };
+        
+        if (proxyRes.headers['content-type']) headers['Content-Type'] = proxyRes.headers['content-type'];
+        if (proxyRes.headers['content-length']) headers['Content-Length'] = proxyRes.headers['content-length'];
+        if (proxyRes.headers['content-range']) headers['Content-Range'] = proxyRes.headers['content-range'];
+
+        res.writeHead(proxyRes.statusCode, headers);
+        proxyRes.pipe(res);
+      });
+
+      proxyReq.on('error', (err) => {
+        console.error('[Streaming Proxy] Pipe error:', err);
+        if (!res.headersSent) {
+          res.writeHead(502);
+          res.end('Proxy error');
+        }
+      });
+
+      req.on('close', () => {
+        proxyReq.destroy();
+      });
+    });
   }
 
   setWebContents(contents) {
@@ -184,35 +293,9 @@ class Downloader {
 
 
   async getStreamUrl(videoId) {
-    const cached = streamCache.get(videoId);
-    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
-      console.log(`[Stream Cache] Hit for: ${videoId}`);
-      return { success: true, url: cached.url };
-    }
-
-    try {
-      const youtubedl = require('youtube-dl-exec');
-      const ytDlpPath = path.join(process.env.YOUTUBE_DL_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
-      const streamUrl = await youtubedl(url, {
-        getUrl: true,
-        format: '140/251/ba/best',
-        noWarnings: true,
-        noCheckCertificates: true,
-        noPlaylist: true,
-        noCheckFormats: true,
-        youtubeSkipDashManifest: true,
-        youtubeSkipHlsManifest: true,
-        extractorArgs: 'youtube:player-client=android,web'
-      }, { execPath: ytDlpPath });
-      
-      const resolvedUrl = streamUrl.trim();
-      streamCache.set(videoId, { url: resolvedUrl, timestamp: Date.now() });
-      return { success: true, url: resolvedUrl };
-    } catch (err) {
-      console.error('getStreamUrl error:', err);
-      return { success: false, error: err.message };
-    }
+    // Return the local streaming proxy URL instead of raw YouTube URL
+    // This allows adaptive-like chunking and prevents 403 Forbidden errors
+    return { success: true, url: `http://127.0.0.1:${this.proxyPort}/stream?videoId=${videoId}` };
   }
 
   async addDownload(songMeta) {
@@ -294,7 +377,6 @@ class Downloader {
         '--ffmpeg-location', ffmpeg,
         '--no-check-certificates',
         '--no-warnings',
-        '--extractor-args', 'youtube:player-client=android,web',
         '--add-header', 'referer:youtube.com',
         '--add-header', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       ];

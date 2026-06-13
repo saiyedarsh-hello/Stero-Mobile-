@@ -71,7 +71,13 @@ export default function CreateAlbumModal({ onClose }) {
       try {
         if (window.electron && window.electron.ytSearch) {
           const results = await window.electron.ytSearch(`${songSearch} songs`);
-          if (results) setYtResults(results);
+          if (results) {
+            const mapped = results.map(r => ({
+              ...r,
+              duration: r.duration?.seconds || r.duration || r.length || 0
+            }));
+            setYtResults(mapped);
+          }
         }
       } catch (err) {
         console.error("YT search failed", err);

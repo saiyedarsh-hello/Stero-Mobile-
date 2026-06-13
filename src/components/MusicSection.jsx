@@ -28,7 +28,6 @@ export default function MusicSection() {
     activeTrack,
     fetchTrendingSongs, 
     fetchTrendingArtists, 
-    streamTrack, 
     playTrack,
     preloadTrack,
     viewHistory,
@@ -95,6 +94,12 @@ export default function MusicSection() {
     return () => { isMounted = false; };
   }, [languageString, fetchTrendingArtists, fetchTrendingSongs, activeView, trendingSongs.length, artists.length, setTrendingData]);
   
+  // Reset scroll positions when search results or trending data changes
+  useEffect(() => {
+    if (artistScrollRef.current) artistScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    if (songScrollRef.current) songScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+  }, [ytSearchResults, ytArtistSearchResults, trendingSongs, artists]);
+  
 
 
 
@@ -133,10 +138,10 @@ export default function MusicSection() {
             </button>
           </div>
         </div>
-        <div ref={artistScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
+        <div ref={artistScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 hide-scrollbar">
           {displayArtists.length === 0 ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={`artist-skel-${i}`} className="flex flex-col items-center gap-3 flex-shrink-0 snap-start">
+              <div key={`artist-skel-${i}`} className="flex flex-col items-center gap-3 flex-shrink-0">
                 <div className="w-24 h-24 rounded-full bg-white/5 animate-pulse" />
                 <div className="w-16 h-3 bg-white/5 rounded animate-pulse" />
               </div>
@@ -145,7 +150,7 @@ export default function MusicSection() {
             displayArtists.map((artist) => (
             <div 
               key={artist.id} 
-              className="flex flex-col items-center gap-3 cursor-pointer group flex-shrink-0 snap-start relative hover:z-10"
+              className="flex flex-col items-center gap-3 cursor-pointer group flex-shrink-0 relative hover:z-10"
               onClick={async () => {
                 if (activeTrack && activeTrack.artist && activeTrack.artist.toLowerCase().includes(artist.name.toLowerCase())) {
                   return;
@@ -153,7 +158,7 @@ export default function MusicSection() {
                 try {
                   const results = await window.electron.ytSearch(`${artist.name} songs`);
                   if (results && results.length > 0) {
-                    streamTrack(results[0], results);
+                    playTrack(results[0], results);
                   }
                 } catch (err) {
                   console.error('Failed to play artist songs:', err);
@@ -213,10 +218,10 @@ export default function MusicSection() {
               </button>
             </div>
           </div>
-          <div ref={followedScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
+          <div ref={followedScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 hide-scrollbar">
             {followedArtistSongs.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <div key={`song-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44 snap-start">
+                <div key={`song-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44">
                   <div className="w-44 h-56 rounded-2xl bg-white/5 animate-pulse" />
                   <div className="flex flex-col gap-2 px-1">
                     <div className="w-3/4 h-4 bg-white/5 rounded animate-pulse" />
@@ -228,9 +233,9 @@ export default function MusicSection() {
               followedArtistSongs.map((song, i) => (
               <div 
                 key={song.videoId + '-' + i} 
-                onClick={() => streamTrack(song, followedArtistSongs)}
+                onClick={() => playTrack(song, followedArtistSongs)}
                 onMouseEnter={() => preloadTrack(song)}
-                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start hover:z-10"
+                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
               >
                 <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                   {(song.coverUrl || song.thumbnail) ? (
@@ -291,10 +296,10 @@ export default function MusicSection() {
             </div>
           </div>
         </div>
-        <div ref={songScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 snap-x hide-scrollbar">
+        <div ref={songScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 hide-scrollbar">
           {(!ytSearchResults && trendingSongs.length === 0) ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={`trend-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44 snap-start">
+              <div key={`trend-skel-${i}`} className="flex flex-col gap-3 flex-shrink-0 w-44">
                 <div className="w-44 h-56 rounded-2xl bg-white/5 animate-pulse" />
                 <div className="flex flex-col gap-2 px-1">
                   <div className="w-3/4 h-4 bg-white/5 rounded animate-pulse" />
@@ -306,9 +311,9 @@ export default function MusicSection() {
             (ytSearchResults || trendingSongs).map((song) => (
             <div 
               key={song.videoId} 
-              onClick={() => streamTrack(song, ytSearchResults || trendingSongs)}
+              onClick={() => playTrack(song, ytSearchResults || trendingSongs)}
               onMouseEnter={() => preloadTrack(song)}
-              className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group snap-start hover:z-10"
+              className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
             >
               <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                 {(song.coverUrl || song.thumbnail) ? (

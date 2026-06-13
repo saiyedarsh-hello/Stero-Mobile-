@@ -25,6 +25,9 @@ const formatTime = (seconds) => {
 
 const getMediaUrl = (path) => {
   if (!path) return '';
+  if (path.startsWith('yt-stream://')) {
+    return `http://127.0.0.1:8998/stream?videoId=${path.replace('yt-stream://', '')}`;
+  }
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
@@ -134,8 +137,30 @@ export default function PlayerBar() {
       } else {
         audioRef.current.pause();
       }
+
+      // Update OS media widget (SMTC on Windows)
+      if ('mediaSession' in navigator) {
+        const coverImg = activeTrack.artwork_path || activeTrack.coverUrl || activeTrack.thumbnail;
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: activeTrack.title || 'Unknown Title',
+          artist: activeTrack.artist || 'Unknown Artist',
+          album: activeTrack.album || 'Single',
+          artwork: coverImg ? [
+            { src: getMediaUrl(coverImg), sizes: '512x512', type: 'image/jpeg' },
+            { src: getMediaUrl(coverImg), sizes: '512x512', type: 'image/png' }
+          ] : []
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => usePlayerStore.getState().togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => usePlayerStore.getState().togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => usePlayerStore.getState().prevTrack());
+        navigator.mediaSession.setActionHandler('nexttrack', () => usePlayerStore.getState().nextTrack());
+      }
     } else {
       audioRef.current.src = '';
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+      }
       lastFilepathRef.current = '';
       setTimeout(() => {
         setDuration(0);
@@ -158,23 +183,9 @@ export default function PlayerBar() {
     // If we are currently restoring a session, do not overwrite it with 0
     if (usePlayerStore.getState().savedPosition > 0) return;
 
-    const track = usePlayerStore.getState().activeTrack;
-    if (!track) return;
-    try {
-      localStorage.setItem('stero-player-session', JSON.stringify({
-        trackId: track.id,
-        track: track, // Persist full track object for ephemeral streams!
-        currentTime: currentTimeSec ?? (audioRef.current?.currentTime ?? 0),
-        volume,
-        muted,
-        shuffle,
-        repeatMode,
-        isPlaying,
-        activePlaylistId,
-        queue: usePlayerStore.getState().queue
-      }));
-    } catch (e) { /* quota errors — silently ignore */ }
-  }, [volume, muted, shuffle, repeatMode, isPlaying, activePlaylistId]);
+    // Disabled session persistence as per user request to always start fresh
+    // and prevent the same song from auto-loading on startup.
+  }, []);
 
   // Save session whenever key playback state changes
   useEffect(() => {
@@ -202,7 +213,8 @@ export default function PlayerBar() {
     const updateProgress = () => {
       if (audioRef.current && !isSeeking) {
         const ct = audioRef.current.currentTime;
-        const dur = duration || audioRef.current.duration || 0;
+        let dur = duration || audioRef.current.duration;
+        if (!dur || !isFinite(dur)) dur = usePlayerStore.getState().activeTrack?.duration || 0;
         
         if (timeTextRef.current) {
           timeTextRef.current.innerText = formatTime(ct);
@@ -245,7 +257,9 @@ export default function PlayerBar() {
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
-      setDuration(audioRef.current.duration || activeTrack?.duration || 0);
+      let d = audioRef.current.duration;
+      if (!d || !isFinite(d)) d = usePlayerStore.getState().activeTrack?.duration || 0;
+      setDuration(d);
       // Seek to saved position after restore
       if (savedPosition && savedPosition > 0) {
         audioRef.current.currentTime = savedPosition;
@@ -271,7 +285,8 @@ export default function PlayerBar() {
 
   // --- Smooth Drag-to-Seek Logic ---
   const updateSeekPosition = (clientX, updateAudio = false) => {
-    const dur = duration || audioRef.current?.duration || 0;
+    let dur = duration || audioRef.current?.duration;
+    if (!dur || !isFinite(dur)) dur = usePlayerStore.getState().activeTrack?.duration || 0;
     if (!progressBarRef.current || !dur) return;
     const rect = progressBarRef.current.getBoundingClientRect();
     const clickX = clientX - rect.left;
@@ -295,16 +310,17 @@ export default function PlayerBar() {
   };
 
   const handleSeekMouseDown = (e) => {
-    const dur = duration || audioRef.current?.duration || 0;
+    let dur = duration || audioRef.current?.duration;
+    if (!dur || !isFinite(dur)) dur = usePlayerStore.getState().activeTrack?.duration || 0;
     if (!audioRef.current || !dur) return;
     e.preventDefault();
     setIsSeeking(true);
     
     const clientX = getClientX(e);
-    updateSeekPosition(clientX, true); // Seek immediately on click
+    updateSeekPosition(clientX, false); // Seek visually only
 
     const handleMouseMove = (moveEvent) => {
-      updateSeekPosition(getClientX(moveEvent), true); // Continuous seek
+      updateSeekPosition(getClientX(moveEvent), false); // Seek visually only
     };
 
     const handleMouseUp = () => {
@@ -382,8 +398,20 @@ export default function PlayerBar() {
 
   const progressPercent = 0; // Updated exclusively by requestAnimationFrame
 
+  const lastErrorRef = useRef(0);
+
   const handleError = (e) => {
     console.error('Audio playback error:', e);
+
+    // Debounce: prevent rapid auto-skipping if multiple tracks fail in a row
+    const now = Date.now();
+    if (now - lastErrorRef.current < 3000) {
+      console.warn('Playback error throttled — stopping to prevent infinite skip loop');
+      usePlayerStore.getState().togglePlay(); // Just stop playback
+      return;
+    }
+    lastErrorRef.current = now;
+
     // Gracefully skip to the next track if the current track file becomes unavailable (e.g. deleted)
     const state = usePlayerStore.getState();
     if (state.queue && state.queue.length > 1) {
@@ -419,9 +447,9 @@ export default function PlayerBar() {
           className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex-shrink-0 cursor-pointer overflow-hidden relative group/art"
           title="Toggle Canvas Visualizer"
         >
-          {currentSong.has_artwork && currentSong.artwork_path ? (
+          {currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail ? (
             <img 
-              src={getMediaUrl(currentSong.artwork_path)}
+              src={getMediaUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail)}
               alt={currentSong.title}
               className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105"
             />

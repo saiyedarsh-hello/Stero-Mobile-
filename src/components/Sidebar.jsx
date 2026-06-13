@@ -1,19 +1,27 @@
 import { usePlayerStore } from '../store/usePlayerStore';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
 import {  
   Radio,
   Library,
   ListMusic,
   Heart,
   ChevronLeft,
+  ChevronRight,
   CloudDownload,
   ArrowDownToLine,
   X,
-  Disc
+  Disc,
+  Headphones,
+  Flame,
+  MoreHorizontal
 } from 'lucide-react';
 
 const getMediaUrl = (path) => {
   if (!path) return '';
+  if (path.startsWith('yt-stream://')) {
+    return `http://127.0.0.1:8998/stream?videoId=${path.replace('yt-stream://', '')}`;
+  }
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
@@ -25,8 +33,22 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     setActiveView,
     downloadState,
     cancelDownload,
-    dominantColor
+    dominantColor,
+    activeTrack,
+    queue,
+    songs,
+    playHistory,
+    playTrack,
+    nextTrack,
+    prevTrack,
+    isPlaying
   } = usePlayerStore();
+
+  const sidebarScrollRef = useRef(null);
+  const sidebarContentRef = useRef(null);
+
+  // Lenis removed from Sidebar to prevent scroll hijacking of clicks.
+  // We rely on native CSS scroll behavior for the sidebar instead.
 
   const menuItems = [
     { id: 'music', label: 'Discover', icon: Radio },
@@ -35,10 +57,69 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     { id: 'favorites', label: 'Favorites', icon: Heart }
   ];
 
+  // Stats Calculations (Real-time monthly tracker)
+  const [monthSeconds, setMonthSeconds] = useState(() => {
+    const storedMonth = localStorage.getItem('stero_stats_month');
+    const currentMonth = new Date().getMonth().toString();
+    
+    if (storedMonth !== currentMonth) {
+      // New month, reset stats
+      localStorage.setItem('stero_stats_month', currentMonth);
+      localStorage.setItem('stero_month_seconds', '0');
+      return 0;
+    }
+    
+    return parseInt(localStorage.getItem('stero_month_seconds') || '0', 10);
+  });
+
+  useEffect(() => {
+    let interval;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setMonthSeconds(prev => {
+          const currentMonth = new Date().getMonth().toString();
+          const storedMonth = localStorage.getItem('stero_stats_month');
+          let newVal = prev + 1;
+          
+          if (storedMonth !== currentMonth) {
+            localStorage.setItem('stero_stats_month', currentMonth);
+            newVal = 1;
+          }
+          
+          localStorage.setItem('stero_month_seconds', newVal.toString());
+          return newVal;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying]);
+
+  const totalMins = Math.floor(monthSeconds / 60);
+  
+  const currentDayOfMonth = new Date().getDate();
+  const dailyAvg = totalMins > 0 ? Math.floor(totalMins / currentDayOfMonth) : 0;
+
+  const outerRing = totalMins > 0 ? Math.min((totalMins / 3000) * 100, 100) : 0;
+
+  // Now Playing Items (Queue list)
+  let upcomingTracks = [];
+  if (queue && queue.length > 0) {
+    const queueActiveIndex = queue.findIndex(t => t.id === activeTrack?.id);
+    let start = queueActiveIndex !== -1 ? queueActiveIndex : 0;
+    upcomingTracks = queue.slice(start, start + 3);
+  } else if (playHistory?.length > 0) {
+    upcomingTracks = playHistory.slice(0, 3);
+  }
+  
+  // Fill with dummy if empty
+  if (upcomingTracks.length === 0) {
+    upcomingTracks.push({ title: 'No track playing', artist: 'Add songs to queue', coverUrl: null });
+  }
+
   return (
     <aside 
-      className={`bg-transparent flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden will-change-[width,opacity] ${
-        isCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-48 opacity-100'
+      className={`bg-transparent flex flex-col justify-between select-none relative z-30 transition-all overflow-hidden will-change-[width,opacity] flex-shrink-0 ${
+        isCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-64 opacity-100'
       }`}
     >
       {/* Custom right border */}
@@ -46,13 +127,13 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
         className={`absolute right-0 top-0 bottom-0 w-[1px] bg-white/8 transition-opacity duration-300 z-10 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`} 
       />
 
-      {/* Container wrapper to prevent squishing text during collapse animation, with smooth slide-fade */}
       <div 
-        className={`w-48 h-full flex flex-col justify-start p-4 pt-8 pb-4 flex-shrink-0 transition-all will-change-[transform,opacity] ${
+        ref={sidebarScrollRef}
+        className={`w-64 h-full flex flex-col justify-start p-4 pt-8 flex-shrink-0 transition-all will-change-[transform,opacity] overflow-y-auto hide-scrollbar ${
           isCollapsed ? 'opacity-0 -translate-x-8 scale-95' : 'opacity-100 translate-x-0 scale-100'
         }`}
       >
-        
+        <div ref={sidebarContentRef} className="flex flex-col w-full min-h-full pb-48">
         {/* Top: Header Controls & Logo */}
         <div>
           {/* Sidebar Header Controls */}
@@ -82,7 +163,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
               isDownloadsOpen ? 'max-h-[400px] opacity-100 mb-4' : 'max-h-0 opacity-0 mb-0 pointer-events-none'
             }`}
           >
-            <div className={`bg-white/[0.05] border border-white/10 rounded-xl p-3 shadow-2xl relative z-50 backdrop-blur-2xl transition-transform duration-500 ${isDownloadsOpen ? 'translate-y-0 scale-100' : '-translate-y-4 scale-95'}`}>
+            <div className={`bg-white/[0.05] border border-white/10 rounded-xl p-3 relative z-50 backdrop-blur-2xl transition-transform duration-500 ${isDownloadsOpen ? 'translate-y-0 scale-100' : '-translate-y-4 scale-95'}`}>
               <span className="text-[9px] uppercase tracking-[0.15em] text-white/40 font-bold block mb-2 px-1">Downloads</span>
               {downloadState?.active?.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -137,7 +218,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
                   <button
                     key={item.id}
                     onClick={() => setActiveView(item.id)}
-                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all duration-300 relative border group ${
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all duration-300 relative border group cursor-pointer ${
                       isActive 
                         ? 'border-transparent shadow-none' 
                         : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:translate-x-1'
@@ -161,6 +242,100 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
 
         </div>
 
+        {/* Bottom: Widgets Stack */}
+        <div className="mt-auto flex flex-col gap-4">
+          
+          {/* NOW PLAYING Widget */}
+          <div 
+            className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col transition-all duration-500"
+            style={{ '--theme-color': dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, 65%)` : '#00F0FF' }}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-bold drop-shadow">Now Playing</span>
+              <div className="flex gap-1">
+                <button onClick={prevTrack} className="w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all active:scale-90"><ChevronLeft size={12} /></button>
+                <button onClick={nextTrack} className="w-5 h-5 rounded hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all active:scale-90"><ChevronRight size={12} /></button>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              {upcomingTracks.map((track, i) => {
+                const isPlayingThis = activeTrack?.id === track.id;
+                let actualIndex = (i + 1).toString().padStart(2, '0');
+                if (queue && queue.length > 0 && track.id) {
+                   const tIndex = queue.findIndex(t => t.id === track.id);
+                   if (tIndex !== -1) actualIndex = (tIndex + 1).toString().padStart(2, '0');
+                }
+
+                return (
+                  <div 
+                    key={track.id || i}
+                    className={`flex items-center group ${track.id ? 'cursor-pointer hover:bg-white/5' : ''} p-1.5 rounded-lg transition-colors`}
+                    onClick={() => {
+                      if (track.id) playTrack(track, queue);
+                    }}
+                  >
+                    <span className={`text-[9px] font-semibold w-5 transition-colors ${isPlayingThis ? 'text-[var(--theme-color)]' : 'text-white/40 group-hover:text-white/80'}`}>{actualIndex}</span>
+                    
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-white/10 flex-shrink-0 relative shadow-sm">
+                      {track.coverUrl || track.artwork_path || track.thumbnail ? (
+                        <img src={getMediaUrl(track.coverUrl || track.artwork_path || track.thumbnail)} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><Disc size={12} className="text-white/40" /></div>
+                      )}
+                      {isPlayingThis && (
+                        <div className="absolute inset-0 ring-1 ring-inset ring-[var(--theme-color)] rounded-md" />
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-col ml-3 flex-1 min-w-0">
+                      <span className={`text-[11px] font-semibold truncate transition-colors ${isPlayingThis ? 'text-[var(--theme-color)]' : 'text-white group-hover:text-[var(--theme-color)]'}`}>{track.title}</span>
+                      <span className="text-[9px] text-white/50 truncate">{track.artist}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LISTENING STATS Widget */}
+          <div 
+            className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col relative transition-all duration-500"
+            style={{ '--theme-color': dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, 65%)` : '#00F0FF' }}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-bold drop-shadow">Listening Stats</span>
+              <MoreHorizontal size={14} className="text-white/50 cursor-pointer hover:text-white transition-colors" />
+            </div>
+
+            <div className="relative flex justify-center items-center py-4">
+              {/* SVG Single Theme Color Ring */}
+              <svg width="150" height="150" viewBox="0 0 150 150" className="transform -rotate-90">
+                {/* Background track */}
+                <circle cx="75" cy="75" r="62" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                
+                {/* Progress track */}
+                <circle cx="75" cy="75" r="62" fill="none" stroke="var(--theme-color)" strokeWidth="12" strokeDasharray="389.5" strokeDashoffset={389.5 - (389.5 * outerRing) / 100} strokeLinecap="round" className="transition-all duration-1000" />
+              </svg>
+
+              {/* Center Text */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
+                <span className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">{totalMins.toLocaleString()}</span>
+                <span className="text-[11px] text-gray-300 font-bold tracking-widest mt-1">MINS</span>
+                <span className="text-[8px] text-gray-400/80 uppercase mt-1 drop-shadow">This Month</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center items-center mt-4 px-1 text-gray-400">
+              <Headphones size={16} className="mr-2" />
+              <span className="text-[10px]">Daily Avg: <span className="text-white font-medium">{dailyAvg} mins</span></span>
+            </div>
+          </div>
+
+          {/* Invisible spacer to guarantee scroll clearance above the music player */}
+          <div className="h-32 flex-shrink-0 pointer-events-none" />
+        </div>
+        </div>
       </div>
     </aside>
   );

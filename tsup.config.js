@@ -6,5 +6,5 @@ export default defineConfig({
   format: ['cjs'],
   outExtension: () => ({ js: '.cjs' }),
   clean: true,
-  external: ['electron', 'better-sqlite3'],
+  external: ['electron', 'better-sqlite3', 'ffmpeg-static', 'youtube-dl-exec'],
 });

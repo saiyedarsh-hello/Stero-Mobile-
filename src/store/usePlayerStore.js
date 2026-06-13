@@ -83,7 +83,6 @@ export const usePlayerStore = create((set, get) => ({
   sessionRestored: false,
 
   // App Settings
-  // App Settings
   appSettings: {},
   
   // Theming
@@ -127,6 +126,7 @@ export const usePlayerStore = create((set, get) => ({
   progress: 0,
   duration: 0,
   queue: [],
+  originalQueue: [],
   queueIndex: 0,
   shuffle: false,
   repeat: 'none', // none, all, one
@@ -339,34 +339,6 @@ export const usePlayerStore = create((set, get) => ({
       }
     } catch (e) {
       console.warn('Failed to restore followed artists:', e);
-    }
-
-    const sessionData = localStorage.getItem('stero-player-session');
-    if (sessionData) {
-      try {
-        const session = JSON.parse(sessionData);
-        if (session) {
-          // Restore track from songs DB or fallback to serialized track object (for ephemeral streams)
-          const trackToPlay = songs.find(s => s.id === session.trackId) || session.track;
-          if (trackToPlay) {
-            set({
-              activeTrack: trackToPlay,
-              isPlaying: session.isPlaying ?? false, // Restore isPlaying state!
-              volume: session.volume ?? 0.8,
-              muted: session.muted ?? false,
-              shuffle: session.shuffle ?? false,
-              repeatMode: session.repeatMode ?? 0,
-              currentRepeatCount: 0,
-              savedPosition: session.currentTime ?? 0,
-              queue: (session.queue && session.queue.length > 0) ? session.queue : songs,
-              queueIndex: Math.max(0, ((session.queue && session.queue.length > 0) ? session.queue : songs).findIndex(s => s.id === trackToPlay.id)),
-              activePlaylistId: session.activePlaylistId ?? null,
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to restore player session:', e);
-      }
     }
   },
 
@@ -608,9 +580,8 @@ export const usePlayerStore = create((set, get) => ({
     
     // Map the incoming youtube track list to standard track objects so the queue and visualizer work perfectly
     const mappedList = trackList.map(t => {
-      const isYtStream = t.filepath && typeof t.filepath === 'string' && t.filepath.startsWith('yt-stream://');
-      const extractedVideoId = isYtStream ? t.filepath.replace('yt-stream://', '') : t.videoId;
-      const vId = extractedVideoId || (typeof t.id === 'string' ? t.id : null);
+      const vId = t.videoId || (typeof t.id === 'string' ? t.id : null);
+      const isYtStream = !!vId || (t.filepath && typeof t.filepath === 'string' && t.filepath.startsWith('yt-stream://'));
       
       let isFav = t.favorite;
       if (isFav === undefined && vId) {
@@ -628,7 +599,7 @@ export const usePlayerStore = create((set, get) => ({
         artwork_path: t.coverUrl || t.thumbnail || t.artwork_path,
         has_artwork: !!(t.coverUrl || t.thumbnail || t.artwork_path || t.has_artwork),
         isStream: isYtStream,
-        filepath: isYtStream ? '' : (t.filepath || ''),
+        filepath: isYtStream ? `yt-stream://${vId}` : (t.filepath || ''),
         duration: t.duration || 0,
         favorite: isFav
       };
@@ -644,7 +615,7 @@ export const usePlayerStore = create((set, get) => ({
       artwork_path: songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path,
       has_artwork: !!(songMeta.coverUrl || songMeta.thumbnail || songMeta.artwork_path || songMeta.has_artwork),
       isStream: true,
-      filepath: (songMeta.filepath && typeof songMeta.filepath === 'string' && songMeta.filepath.startsWith('yt-stream://')) ? '' : (songMeta.filepath || ''),
+      filepath: `yt-stream://${songMeta.videoId || songMeta.id}`,
       duration: songMeta.duration || 0,
       favorite: songMeta.favorite !== undefined ? songMeta.favorite : (() => {
         const vId = songMeta.videoId || (typeof songMeta.id === 'string' ? songMeta.id : null);
@@ -676,28 +647,6 @@ export const usePlayerStore = create((set, get) => ({
 
     // Play immediately to show UI (will be silent/buffering until URL is fetched)
     get().playTrack(tempTrack, mappedList.length > 0 ? mappedList : [tempTrack]);
-    
-    // Fetch direct stream URL if not already resolved
-    if (tempTrack.filepath && tempTrack.filepath.startsWith('http')) {
-      setTimeout(() => {
-        get().preloadNextTrack();
-      }, 1000);
-      return;
-    }
-
-    const result = await window.electron.ytGetStreamUrl(tempTrack.id);
-    if (result && result.success && result.url) {
-      set(state => ({
-        activeTrack: state.activeTrack?.id === tempTrack.id 
-          ? { ...state.activeTrack, filepath: result.url } 
-          : state.activeTrack
-      }));
-      setTimeout(() => {
-        get().preloadNextTrack();
-      }, 1000);
-    } else {
-      console.error("Failed to fetch stream URL", result);
-    }
   },
 
   addToHistory: (track) => {
@@ -711,15 +660,16 @@ export const usePlayerStore = create((set, get) => ({
 
   playTrack: (track, trackList = [], playlistId = undefined) => {
     get().addToHistory(track);
-    // Unify routing: If the track is a saved stream pointer in the DB, redirect it directly into the streaming pipeline!
-    if (track.filepath && track.filepath.startsWith('yt-stream://')) {
-      const videoId = track.filepath.replace('yt-stream://', '');
-      get().streamTrack({ ...track, videoId }, trackList);
+    
+    // Route YouTube search results to streamTrack to get saved to DB first
+    const isUnsavedYoutube = !track.filepath && (track.videoId || (track.id && typeof track.id === 'string'));
+    if (isUnsavedYoutube) {
+      get().streamTrack(track, trackList);
       return;
     }
 
     const list = trackList.length > 0 ? trackList : [track];
-    const index = list.findIndex(t => t.id === track.id);
+    const index = list.findIndex(t => t.id === track.id || (t.videoId || t.id) === (track.videoId || track.id));
     
     let resolvedPlaylistId = null;
     if (playlistId !== undefined) {
@@ -734,6 +684,7 @@ export const usePlayerStore = create((set, get) => ({
     set({
       activeTrack: track,
       queue: list,
+      originalQueue: list,
       queueIndex: index !== -1 ? index : 0,
       isPlaying: true,
       activePlaylistId: resolvedPlaylistId,
@@ -828,27 +779,14 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   nextTrack: () => {
-    const { queue, queueIndex, shuffle } = get();
+    const { queue, queueIndex } = get();
     if (queue.length === 0) return;
 
-    let nextIndex;
-    
-    if (shuffle) {
-      if (queue.length > 1) {
-        // Find a random index different from current index
-        do {
-          nextIndex = Math.floor(Math.random() * queue.length);
-        } while (nextIndex === queueIndex);
-      } else {
-        nextIndex = 0;
-      }
-    } else {
-      nextIndex = queueIndex + 1;
-      if (nextIndex >= queue.length) {
-        // End of queue and no repeat-all
-        set({ isPlaying: false });
-        return;
-      }
+    let nextIndex = queueIndex + 1;
+    if (nextIndex >= queue.length) {
+      // End of queue and no repeat-all
+      set({ isPlaying: false });
+      return;
     }
 
     const nextTrack = queue[nextIndex];
@@ -880,25 +818,13 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   prevTrack: () => {
-    const { queue, queueIndex, shuffle } = get();
+    const { queue, queueIndex } = get();
     if (queue.length === 0) return;
 
-    let prevIndex;
-
-    if (shuffle) {
-      if (queue.length > 1) {
-        do {
-          prevIndex = Math.floor(Math.random() * queue.length);
-        } while (prevIndex === queueIndex);
-      } else {
-        prevIndex = 0;
-      }
-    } else {
-      prevIndex = queueIndex - 1;
-      if (prevIndex < 0) {
-        // Stay at the first song
-        prevIndex = 0;
-      }
+    let prevIndex = queueIndex - 1;
+    if (prevIndex < 0) {
+      // Stay at the first song
+      prevIndex = 0;
     }
 
     const prevTrack = queue[prevIndex];
@@ -925,7 +851,35 @@ export const usePlayerStore = create((set, get) => ({
 
   setVolume: (vol) => set({ volume: vol }),
   setMuted: (isMuted) => set({ muted: isMuted }),
-  setShuffle: (shuf) => set({ shuffle: shuf }),
+  setShuffle: (shuf) => set((state) => {
+    const originalQ = state.originalQueue || state.queue || [];
+    if (shuf) {
+      const activeTrack = state.activeTrack;
+      if (!activeTrack || originalQ.length === 0) return { shuffle: true };
+      
+      const shuffled = [...originalQ];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      const currentIndex = shuffled.findIndex(t => t.id === activeTrack.id || (t.videoId && t.videoId === activeTrack.videoId));
+      if (currentIndex !== -1) {
+        shuffled.splice(currentIndex, 1);
+        shuffled.unshift(activeTrack);
+      }
+      
+      return { shuffle: true, queue: shuffled, originalQueue: originalQ, queueIndex: 0 };
+    } else {
+      const activeTrack = state.activeTrack;
+      let newIndex = 0;
+      if (activeTrack && originalQ.length > 0) {
+        newIndex = originalQ.findIndex(t => t.id === activeTrack.id || (t.videoId && t.videoId === activeTrack.videoId));
+        if (newIndex === -1) newIndex = 0;
+      }
+      return { shuffle: false, queue: originalQ, originalQueue: originalQ, queueIndex: newIndex };
+    }
+  }),
   setRepeatMode: (mode) => set({ repeatMode: mode }),
   incrementRepeatCount: () => set(state => ({ currentRepeatCount: state.currentRepeatCount + 1 })),
   resetRepeatCount: () => set({ currentRepeatCount: 0 }),

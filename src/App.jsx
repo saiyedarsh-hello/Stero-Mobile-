@@ -120,12 +120,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeTrack || !activeTrack.has_artwork || !activeTrack.artwork_path) {
+    const activeCover = activeTrack?.artwork_path || activeTrack?.coverUrl || activeTrack?.thumbnail;
+    if (!activeTrack || !activeCover) {
       setDominantColor({ h: 260, s: 40, l: 8 });
       return;
     }
 
-    const url = getMediaUrl(activeTrack.artwork_path);
+    const url = getMediaUrl(activeCover);
     if (colorWorkerRef.current) {
       colorWorkerRef.current.onmessage = (e) => {
         if (e.data.error) {
@@ -152,15 +153,17 @@ export default function App() {
       wheelMultiplier: 1.2,
     });
 
+    let rafId;
     function raf(time) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
 
     return () => {
       lenis.destroy();
+      cancelAnimationFrame(rafId);
     };
   }, []);
 
@@ -227,6 +230,11 @@ export default function App() {
     };
   }, [fetchLibrary, setScanStatus, resyncFolder]);
 
+  // Clear search query when changing views
+  useEffect(() => {
+    setSearchQuery('');
+  }, [activeView, setSearchQuery]);
+
   // Determine active component in main view panel
   const renderActiveView = () => {
     switch (activeView) {
@@ -281,7 +289,7 @@ export default function App() {
             artist: r.artist,
             album: r.album,
             coverUrl: r.thumbnail,
-            duration: 0
+            duration: r.duration?.seconds || r.duration || r.length || 0
           }));
           usePlayerStore.getState().setYtSearchResults(mappedResults);
         } else {
@@ -314,8 +322,6 @@ export default function App() {
     <div className="h-screen w-screen text-white flex flex-col justify-between overflow-hidden relative select-none font-sans transition-colors duration-1000 ease-in-out transform-gpu rounded-none border-none" style={appBgStyle}>
       {activeView !== 'visualizer' && (
         <>
-          {/* Absolute top drag region for window dragging (bypasses header click issues) */}
-          <div className="absolute top-0 left-0 right-[160px] h-6 window-drag z-50 pointer-events-auto" />
 
           {/* Custom Window Controls */}
           <WindowControls />
@@ -326,7 +332,7 @@ export default function App() {
       <div 
         className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out pointer-events-none opacity-40"
         style={{
-          backgroundImage: activeTrack?.has_artwork ? `url("${getMediaUrl(activeTrack.artwork_path)}")` : 'none',
+          backgroundImage: (activeTrack?.artwork_path || activeTrack?.coverUrl || activeTrack?.thumbnail) ? `url("${getMediaUrl(activeTrack.artwork_path || activeTrack.coverUrl || activeTrack.thumbnail)}")` : 'none',
           filter: 'blur(120px) saturate(150%)',
           transform: 'scale(1.2)',
           zIndex: 0
@@ -347,6 +353,8 @@ export default function App() {
 
           {/* Header Bar */}
           <header className="grid grid-cols-3 items-center pt-8 pb-4 pl-8 pr-[160px] border-b border-white/5 select-none flex-shrink-0 relative z-40">
+            {/* Thin drag strip at the very top of the header for window dragging */}
+            <div className="absolute top-0 left-0 right-0 h-6 window-drag" />
             {/* Left aligned: navigation controls */}
             <div className="flex items-center gap-6 justify-start">
               {/* Sidebar Expand Button (visible only when collapsed) */}
@@ -503,9 +511,11 @@ export default function App() {
       </div>
 
       {/* Canvas Realtime Visualizer Screen Overlay */}
-      <Suspense fallback={null}>
-        <Visualizer />
-      </Suspense>
+      {activeView === 'visualizer' && (
+        <Suspense fallback={null}>
+          <Visualizer />
+        </Suspense>
+      )}
 
       {/* Bottom Gradient Mask to fill space behind the floating player */}
       <div
