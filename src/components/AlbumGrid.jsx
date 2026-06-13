@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { FolderHeart, Plus, Trash2, Music, Play, Pause } from 'lucide-react';
 import CreateAlbumModal from './CreateAlbumModal';
 import HoldToDeleteButton from './HoldToDeleteButton';
@@ -30,7 +31,16 @@ export default function AlbumGrid() {
     activeTrack,
     playTrack,
     togglePlay
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    customAlbums: state.customAlbums,
+    searchQuery: state.searchQuery,
+    setActiveView: state.setActiveView,
+    deleteCustomAlbum: state.deleteCustomAlbum,
+    isPlaying: state.isPlaying,
+    activeTrack: state.activeTrack,
+    playTrack: state.playTrack,
+    togglePlay: state.togglePlay
+  })));
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 

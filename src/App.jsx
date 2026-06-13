@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { usePlayerStore } from './store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import Lenis from 'lenis';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
@@ -93,7 +94,35 @@ export default function App() {
     goBackView,
     goForwardView,
     initDownloadListener
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    activeView: state.activeView,
+    activeTrack: state.activeTrack,
+    dominantColor: state.dominantColor,
+    setDominantColor: state.setDominantColor,
+    searchQuery: state.searchQuery,
+    setSearchQuery: state.setSearchQuery,
+    fetchLibrary: state.fetchLibrary,
+    setScanStatus: state.setScanStatus,
+    resyncFolder: state.resyncFolder,
+    scanFolder: state.scanFolder,
+    scanStatus: state.scanStatus,
+    editingSong: state.editingSong,
+    setEditingSong: state.setEditingSong,
+    editingPlaylist: state.editingPlaylist,
+    setEditingPlaylist: state.setEditingPlaylist,
+    nextTrack: state.nextTrack,
+    prevTrack: state.prevTrack,
+    volume: state.volume,
+    setVolume: state.setVolume,
+    muted: state.muted,
+    setMuted: state.setMuted,
+    togglePlay: state.togglePlay,
+    historyIndex: state.historyIndex,
+    viewHistory: state.viewHistory,
+    goBackView: state.goBackView,
+    goForwardView: state.goForwardView,
+    initDownloadListener: state.initDownloadListener
+  })));
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const scrollWrapperRef = useRef(null);

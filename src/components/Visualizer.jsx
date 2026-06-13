@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { X } from 'lucide-react';
 
 const getMediaUrl = (path) => {
@@ -21,7 +22,17 @@ export default function Visualizer() {
     playTrack,
     activePlaylistId,
     dominantColor
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    activeTrack: state.activeTrack,
+    activeView: state.activeView,
+    setActiveView: state.setActiveView,
+    isPlaying: state.isPlaying,
+    queue: state.queue,
+    songs: state.songs,
+    playTrack: state.playTrack,
+    activePlaylistId: state.activePlaylistId,
+    dominantColor: state.dominantColor
+  })));
 
   const [discClicks, setDiscClicks] = useState(0);
 

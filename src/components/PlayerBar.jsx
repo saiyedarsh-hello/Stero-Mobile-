@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import RetryImage from './RetryImage';
 
 import { 
@@ -15,8 +16,11 @@ import {
   Maximize2,
   Disc,
   Pencil,
-  CloudDownload
+  CloudDownload,
+  ListPlus,
+  Check
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const formatTime = (seconds) => {
   if (isNaN(seconds) || seconds === null) return '0:00';
@@ -84,8 +88,36 @@ export default function PlayerBar() {
     setActiveView,
     setEditingSong,
     activePlaylistId,
-    dominantColor
-  } = usePlayerStore();
+    dominantColor,
+    customAlbums,
+    addSongToCustomAlbum
+  } = usePlayerStore(useShallow(state => ({
+    activeTrack: state.activeTrack,
+    isPlaying: state.isPlaying,
+    volume: state.volume,
+    muted: state.muted,
+    shuffle: state.shuffle,
+    repeatMode: state.repeatMode,
+    activeView: state.activeView,
+    songs: state.songs,
+    queue: state.queue,
+    savedPosition: state.savedPosition,
+    clearSavedPosition: state.clearSavedPosition,
+    togglePlay: state.togglePlay,
+    nextTrack: state.nextTrack,
+    prevTrack: state.prevTrack,
+    setVolume: state.setVolume,
+    setMuted: state.setMuted,
+    setShuffle: state.setShuffle,
+    cycleRepeatMode: state.cycleRepeatMode,
+    toggleFavorite: state.toggleFavorite,
+    setActiveView: state.setActiveView,
+    setEditingSong: state.setEditingSong,
+    activePlaylistId: state.activePlaylistId,
+    dominantColor: state.dominantColor,
+    customAlbums: state.customAlbums,
+    addSongToCustomAlbum: state.addSongToCustomAlbum
+  })));
 
   const currentSong = activeTrack || {
     title: 'Not Playing',
@@ -105,7 +137,34 @@ export default function PlayerBar() {
   const [isSeeking, setIsSeeking] = useState(false);
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
+  const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
+  const [addedPlaylistId, setAddedPlaylistId] = useState(null);
   const isHoveringBarRef = useRef(false);
+  const playlistMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (playlistMenuRef.current && !playlistMenuRef.current.contains(event.target)) {
+        setShowPlaylistMenu(false);
+      }
+    };
+    if (showPlaylistMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPlaylistMenu]);
+
+  const handleAddToPlaylist = async (albumId) => {
+    if (!activeTrack) return;
+    await addSongToCustomAlbum(albumId, activeTrack);
+    setAddedPlaylistId(albumId);
+    setTimeout(() => {
+      setAddedPlaylistId(null);
+      setShowPlaylistMenu(false);
+    }, 1500);
+  };
 
   // Refs for direct DOM updates to bypass React re-rendering
   const timeTextRef = useRef(null);
@@ -600,6 +659,65 @@ export default function PlayerBar() {
 
       {/* Right section: Volume + Visualizer Toggle */}
       <div className="w-1/4 min-w-[220px] flex items-center justify-end gap-4">
+        {/* Playlist Menu Button & Popover */}
+        <div className="relative flex items-center" ref={playlistMenuRef}>
+          <button 
+            onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
+            disabled={!activeTrack}
+            className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 hover:scale-110 active:scale-95 transition-all ${
+              showPlaylistMenu ? 'bg-white/20 text-white' : 'text-white/80 hover:text-white'
+            } disabled:opacity-30 disabled:cursor-not-allowed`}
+            title="Add to Playlist"
+          >
+            <ListPlus size={15} />
+          </button>
+
+          <AnimatePresence>
+            {showPlaylistMenu && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-12 right-0 md:left-1/2 md:-translate-x-1/2 w-56 max-h-[16rem] bg-black/60 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden z-[100]"
+              >
+                <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Add to Playlist</span>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-1.5 flex flex-col gap-0.5 max-h-40">
+                  {customAlbums.length === 0 ? (
+                    <div className="text-xs text-gray-500 text-center py-4">No playlists yet</div>
+                  ) : (
+                    customAlbums.map(album => (
+                      <button
+                        key={album.id}
+                        onClick={() => handleAddToPlaylist(album.id)}
+                        className="flex items-center justify-between w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 transition-colors group"
+                      >
+                        <span className="text-sm font-medium text-gray-300 group-hover:text-white truncate pr-2">{album.name}</span>
+                        {addedPlaylistId === album.id ? (
+                          <Check size={14} className="text-green-400 flex-shrink-0" />
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="p-2 border-t border-white/10 bg-white/[0.02]">
+                  <button 
+                    onClick={() => {
+                      setShowPlaylistMenu(false);
+                      setActiveView('albums');
+                    }}
+                    className="w-full py-2 rounded-xl text-xs font-bold text-white bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-sm"
+                  >
+                    Manage Playlists
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <button 
           onClick={toggleVisualizer}
           className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all ${

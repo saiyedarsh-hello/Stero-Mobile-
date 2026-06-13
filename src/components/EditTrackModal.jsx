@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Music, Check, Loader2 } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const getMediaUrl = (path) => {
   if (!path) return '';
@@ -9,7 +10,9 @@ const getMediaUrl = (path) => {
 };
 
 export default function EditTrackModal({ song, onClose }) {
-  const { updateSongMeta } = usePlayerStore();
+  const { updateSongMeta } = usePlayerStore(useShallow(state => ({
+    updateSongMeta: state.updateSongMeta
+  })));
 
   const [title, setTitle] = useState(song?.title || '');
   const [album, setAlbum] = useState(song?.album || '');

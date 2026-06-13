@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { X, Image as ImageIcon, Check } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function EditHeroModal({ onClose }) {
-  const { appSettings, updateAppSetting } = usePlayerStore();
+  const { appSettings, updateAppSetting } = usePlayerStore(useShallow(state => ({
+    appSettings: state.appSettings,
+    updateAppSetting: state.updateAppSetting
+  })));
   
   const [title, setTitle] = useState(appSettings.dashboard_title || 'music');
   const [coverPath, setCoverPath] = useState(appSettings.dashboard_cover_path || '');

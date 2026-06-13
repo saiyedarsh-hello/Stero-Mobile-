@@ -1,4 +1,5 @@
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useState, useEffect, useRef } from 'react';
 
 import {  
@@ -46,7 +47,23 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     nextTrack,
     prevTrack,
     isPlaying
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    activeView: state.activeView,
+    setActiveView: state.setActiveView,
+    downloadState: state.downloadState,
+    cancelDownload: state.cancelDownload,
+    clearCompletedDownload: state.clearCompletedDownload,
+    clearAllCompletedDownloads: state.clearAllCompletedDownloads,
+    dominantColor: state.dominantColor,
+    activeTrack: state.activeTrack,
+    queue: state.queue,
+    songs: state.songs,
+    playHistory: state.playHistory,
+    playTrack: state.playTrack,
+    nextTrack: state.nextTrack,
+    prevTrack: state.prevTrack,
+    isPlaying: state.isPlaying
+  })));
 
   const sidebarScrollRef = useRef(null);
   const sidebarContentRef = useRef(null);

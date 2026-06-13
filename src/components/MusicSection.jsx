@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { ChevronLeft, ChevronRight, Play, Heart, Disc, Plus, Check, CloudDownload } from 'lucide-react';
 import LanguageModal from './LanguageModal';
 import RetryImage from './RetryImage';
@@ -73,7 +74,29 @@ export default function MusicSection() {
     toggleFollowArtist,
     downloadState,
     startDownload
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    appSettings: state.appSettings,
+    activeTrack: state.activeTrack,
+    fetchTrendingSongs: state.fetchTrendingSongs,
+    fetchTrendingArtists: state.fetchTrendingArtists,
+    playTrack: state.playTrack,
+    preloadTrack: state.preloadTrack,
+    viewHistory: state.viewHistory,
+    activeView: state.activeView,
+    trendingArtists: state.trendingArtists,
+    trendingSongs: state.trendingSongs,
+    ytSearchResults: state.ytSearchResults,
+    ytArtistSearchResults: state.ytArtistSearchResults,
+    setTrendingData: state.setTrendingData,
+    toggleFavorite: state.toggleFavorite,
+    playHistory: state.playHistory,
+    songs: state.songs,
+    followedArtists: state.followedArtists,
+    followedArtistSongs: state.followedArtistSongs,
+    toggleFollowArtist: state.toggleFollowArtist,
+    downloadState: state.downloadState,
+    startDownload: state.startDownload
+  })));
 
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   // Hardcoded to english only for now

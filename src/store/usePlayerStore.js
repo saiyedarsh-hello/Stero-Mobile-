@@ -473,6 +473,30 @@ export const usePlayerStore = create((set, get) => ({
     }
   },
 
+  addSongToCustomAlbum: async (albumId, song) => {
+    try {
+      const album = get().customAlbums.find(a => a.id === albumId);
+      if (!album) return;
+      
+      let trackIdToSave = song.id || song.videoId;
+      
+      if (window.electron && typeof trackIdToSave === 'string') {
+        const newDbSong = await window.electron.addStreamSongToDb(song);
+        if (newDbSong && newDbSong.id) {
+          trackIdToSave = newDbSong.id;
+        }
+      }
+
+      const currentSongIds = (album.songs || []).map(s => s.id);
+      if (currentSongIds.includes(trackIdToSave)) return; // Already exists
+
+      const newSongIds = [...currentSongIds, trackIdToSave];
+      await get().updateCustomAlbum(albumId, album.name, album.cover_path, newSongIds);
+    } catch (err) {
+      console.error('Failed to add song to custom album:', err);
+    }
+  },
+
   deleteCustomAlbum: async (albumId) => {
     try {
       const deletedAlbum = get().customAlbums.find(a => a.id === albumId);

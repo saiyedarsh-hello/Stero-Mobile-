@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useDeferredValue, forwardRef } fr
 import { TableVirtuoso } from 'react-virtuoso';
 import HoldToDeleteButton from './HoldToDeleteButton';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { 
   Play, 
   Pause,
@@ -85,7 +86,27 @@ export default function SongList() {
     deleteSong,
     appSettings,
     dominantColor
-  } = usePlayerStore();
+  } = usePlayerStore(useShallow(state => ({
+    songs: state.songs,
+    customAlbums: state.customAlbums,
+    activeView: state.activeView,
+    selectedAlbumName: state.selectedAlbumName,
+    selectedAlbumId: state.selectedAlbumId,
+    selectedArtistName: state.selectedArtistName,
+    searchQuery: state.searchQuery,
+    activeTrack: state.activeTrack,
+    isPlaying: state.isPlaying,
+    playTrack: state.playTrack,
+    preloadTrack: state.preloadTrack,
+    togglePlay: state.togglePlay,
+    toggleFavorite: state.toggleFavorite,
+    setActiveView: state.setActiveView,
+    setEditingSong: state.setEditingSong,
+    setEditingPlaylist: state.setEditingPlaylist,
+    deleteSong: state.deleteSong,
+    appSettings: state.appSettings,
+    dominantColor: state.dominantColor
+  })));
 
   const [activeMenuSongId, setActiveMenuSongId] = useState(null);
   const [sortField, setSortField] = useState(null);

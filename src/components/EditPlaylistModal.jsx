@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { X, Search, Check } from 'lucide-react';
 import Lenis from 'lenis';
 
 export default function EditPlaylistModal({ playlist, onClose }) {
-  const { songs, updateCustomAlbum } = usePlayerStore();
+  const { songs, updateCustomAlbum } = usePlayerStore(useShallow(state => ({
+    songs: state.songs,
+    updateCustomAlbum: state.updateCustomAlbum
+  })));
   
   const [name, setName] = useState(playlist?.name || '');
   const [coverPath, setCoverPath] = useState(playlist?.cover_path || '');

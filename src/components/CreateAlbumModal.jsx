@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Music, Check, Loader2, Search, Plus, Play } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const getMediaUrl = (path) => {
   if (!path) return '';
@@ -9,7 +10,11 @@ const getMediaUrl = (path) => {
 };
 
 export default function CreateAlbumModal({ onClose }) {
-  const { songs, createCustomAlbum, streamTrack } = usePlayerStore();
+  const { songs, createCustomAlbum, streamTrack } = usePlayerStore(useShallow(state => ({
+    songs: state.songs,
+    createCustomAlbum: state.createCustomAlbum,
+    streamTrack: state.streamTrack
+  })));
 
   const [name, setName] = useState('');
   const [coverPath, setCoverPath] = useState('');

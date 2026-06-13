@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Globe, Check, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -15,7 +16,9 @@ const LANGUAGES = [
 ];
 
 export default function LanguageModal({ onSelect }) {
-  const { updateAppSetting } = usePlayerStore();
+  const { updateAppSetting } = usePlayerStore(useShallow(state => ({
+    updateAppSetting: state.updateAppSetting
+  })));
   const [selected, setSelected] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
