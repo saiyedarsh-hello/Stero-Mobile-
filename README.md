@@ -25,6 +25,15 @@ Play local audio files, manage playlists, and download high-quality music direct
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/screenshot1.png" width="48%" alt="Library Overview" />
+  <img src="assets/screenshot2.png" width="48%" alt="Player Interface" />
+</p>
+
+---
+
 ## ✨ Features
 
 - 🎨 **Modern & Beautiful UI**: Built with React and beautifully styled using Tailwind CSS.
