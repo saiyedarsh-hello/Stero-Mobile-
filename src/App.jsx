@@ -345,7 +345,19 @@ export default function App() {
 
   const handleSearchKeyDown = async (e) => {
     if (e.key === 'Enter') {
-      addToHistory(searchQuery);
+      const queryToAdd = searchQuery;
+      
+      // Close dropdown with animation first
+      setIsSearchFocused(false);
+      e.currentTarget.blur();
+      
+      // Add to history after the exit animation completes (250ms)
+      setTimeout(() => {
+        if (queryToAdd.trim()) {
+          addToHistory(queryToAdd);
+        }
+      }, 250);
+
       if (activeView === 'music') {
         const results = usePlayerStore.getState().ytSearchResults;
         if (results && results.length > 0) {
@@ -445,10 +457,7 @@ export default function App() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onFocus={() => setIsSearchFocused(true)}
-                      onBlur={() => {
-                        if (searchQuery.trim()) {
-                          addToHistory(searchQuery);
-                        }
+                       onBlur={() => {
                         setTimeout(() => setIsSearchFocused(false), 200);
                       }}
                       onKeyDown={handleSearchKeyDown}
@@ -473,12 +482,12 @@ export default function App() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.96 }}
                         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute top-full mt-2 w-[300px] xl:w-[400px] group-focus-within:w-[550px] bg-black/20 border border-white/10 rounded-2xl overflow-hidden z-50 p-4 shadow-none"
+                        className="absolute top-full mt-2 w-[300px] xl:w-[400px] group-focus-within:w-[550px] bg-black/22 border border-white/10 rounded-2xl overflow-hidden z-50 p-4 shadow-none"
                         style={{
                           width: 'var(--search-width, 100%)',
                           minWidth: '300px',
                           maxWidth: '550px',
-                          backdropFilter: 'blur(20px)',
+                          backdropFilter: 'blur(22px)',
                           WebkitBackdropFilter: 'blur(20px)'
                         }}
                       >
