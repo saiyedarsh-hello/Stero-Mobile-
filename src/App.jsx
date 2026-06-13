@@ -357,13 +357,6 @@ export default function App() {
           addToHistory(queryToAdd);
         }
       }, 250);
-
-      if (activeView === 'music') {
-        const results = usePlayerStore.getState().ytSearchResults;
-        if (results && results.length > 0) {
-          usePlayerStore.getState().streamTrack(results[0], results);
-        }
-      }
     }
   };
 
