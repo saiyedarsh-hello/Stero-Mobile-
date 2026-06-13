@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import WindowControls from './components/WindowControls';
 import MusicSection from './components/MusicSection';
-import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch, X } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ColorWorker from './workers/colorWorker.js?worker&inline';
@@ -98,6 +98,40 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const scrollWrapperRef = useRef(null);
   const scrollContentRef = useRef(null);
+
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('stero_search_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const addToHistory = (query) => {
+    if (!query || !query.trim()) return;
+    const trimmed = query.trim();
+    setSearchHistory(prev => {
+      const filtered = prev.filter(item => item.toLowerCase() !== trimmed.toLowerCase());
+      const updated = [trimmed, ...filtered].slice(0, 10);
+      localStorage.setItem('stero_search_history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const removeFromHistory = (query) => {
+    setSearchHistory(prev => {
+      const updated = prev.filter(item => item !== query);
+      localStorage.setItem('stero_search_history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearAllHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('stero_search_history');
+  };
 
   // Global dominant color extraction via Web Worker to prevent UI blocking
   const colorWorkerRef = useRef(null);
@@ -310,10 +344,13 @@ export default function App() {
   }, [searchQuery, activeView]);
 
   const handleSearchKeyDown = async (e) => {
-    if (e.key === 'Enter' && activeView === 'music') {
-      const results = usePlayerStore.getState().ytSearchResults;
-      if (results && results.length > 0) {
-        usePlayerStore.getState().streamTrack(results[0], results);
+    if (e.key === 'Enter') {
+      addToHistory(searchQuery);
+      if (activeView === 'music') {
+        const results = usePlayerStore.getState().ytSearchResults;
+        if (results && results.length > 0) {
+          usePlayerStore.getState().streamTrack(results[0], results);
+        }
       }
     }
   };
@@ -339,17 +376,21 @@ export default function App() {
         }}
       />
 
+
+
       {/* Upper Workspace Panel */}
       <div className="flex flex-1 w-full overflow-hidden relative z-10">
 
         {/* Collapsible Sidebar */}
-        <Sidebar
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(true)}
-        />
+        <div className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${isSearchFocused ? 'blur-[4px] opacity-40 scale-[0.99] pointer-events-none' : ''}`}>
+          <Sidebar
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(true)}
+          />
+        </div>
 
         {/* Center Workspace */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-white/[0.02] backdrop-blur-[12px] transition-all duration-500`}>
+        <div className={`flex-1 flex flex-col overflow-hidden bg-white/[0.02] transition-all duration-500`}>
 
           {/* Header Bar */}
           <header className="grid grid-cols-3 items-center pt-8 pb-4 pl-8 pr-[160px] border-b border-white/5 select-none flex-shrink-0 relative z-40">
@@ -394,27 +435,106 @@ export default function App() {
             </div>
 
             {/* Center aligned: Search field */}
-            <div className="flex justify-center">
+            <div className="flex justify-center relative">
               {activeView !== 'visualizer' && (
-                <div className="group flex items-center gap-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 rounded-full px-6 py-2.5 w-[300px] xl:w-[400px] focus-within:!w-[550px] focus-within:border-white/30 focus-within:bg-white/[0.08] focus-within:shadow-[0_0_35px_rgba(168,85,247,0.15),0_0_15px_rgba(255,255,255,0.05)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] backdrop-blur-xl">
-                  <Search size={18} className="text-gray-400 group-focus-within:text-white transition-colors duration-300" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={handleSearchKeyDown}
-                    placeholder={getSearchPlaceholder()}
-                    className="select-text bg-transparent border-none outline-none w-full text-white placeholder-white/30 text-sm tracking-wide"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
+                <>
+                  <div className="group flex items-center gap-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 rounded-full px-6 py-2.5 w-[300px] xl:w-[400px] focus-within:!w-[550px] focus-within:border-white/30 focus-within:bg-white/[0.08] focus-within:shadow-[0_0_35px_rgba(168,85,247,0.15),0_0_15px_rgba(255,255,255,0.05)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] backdrop-blur-xl">
+                    <Search size={18} className="text-gray-400 group-focus-within:text-white transition-colors duration-300" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setIsSearchFocused(true)}
+                      onBlur={() => {
+                        if (searchQuery.trim()) {
+                          addToHistory(searchQuery);
+                        }
+                        setTimeout(() => setIsSearchFocused(false), 200);
+                      }}
+                      onKeyDown={handleSearchKeyDown}
+                      placeholder={getSearchPlaceholder()}
+                      className="select-text bg-transparent border-none outline-none w-full text-white placeholder-white/30 text-sm tracking-wide"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recent Searches Dropdown */}
+                  <AnimatePresence>
+                    {isSearchFocused && searchHistory.length > 0 && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.96 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute top-full mt-2 w-[300px] xl:w-[400px] group-focus-within:w-[550px] bg-black/20 border border-white/10 rounded-2xl overflow-hidden z-50 p-4 shadow-none"
+                        style={{
+                          width: 'var(--search-width, 100%)',
+                          minWidth: '300px',
+                          maxWidth: '550px',
+                          backdropFilter: 'blur(20px)',
+                          WebkitBackdropFilter: 'blur(20px)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-2 px-1">
+                          <div className="flex items-center gap-2 text-white/40">
+                            <Clock size={12} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Recent Searches</span>
+                          </div>
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                            }}
+                            onClick={clearAllHistory}
+                            className="text-[10px] font-semibold text-gray-400 hover:text-white px-2.5 py-1 rounded-full border border-white/5 hover:border-white/10 bg-white/5 hover:bg-white/10 transition-all active:scale-95 cursor-pointer"
+                          >
+                            Clear all
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-0.5 max-h-[240px] overflow-y-auto pr-1">
+                          {searchHistory.map((item, idx) => (
+                            <div
+                              key={idx}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                              }}
+                              className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/[0.04] transition-all group/item cursor-pointer"
+                              onClick={() => {
+                                setSearchQuery(item);
+                                addToHistory(item);
+                                setIsSearchFocused(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <Search size={13} className="text-gray-500 group-hover/item:text-white/80 transition-colors" />
+                                <span className="text-sm text-gray-300 group-hover/item:text-white truncate transition-all group-hover/item:translate-x-0.5">{item}</span>
+                              </div>
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeFromHistory(item);
+                                }}
+                                className="text-gray-500 hover:text-red-400 p-1 rounded-full hover:bg-white/10 transition-all opacity-0 group-hover/item:opacity-100"
+                                title="Remove search"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
               )}
             </div>
 
@@ -454,8 +574,24 @@ export default function App() {
             </div>
           </header>
 
+          {/* Invisible backdrop to dismiss search on click */}
+          {isSearchFocused && (
+            <div 
+              className="absolute inset-0 z-20 cursor-default"
+              onMouseDown={() => {
+                setIsSearchFocused(false);
+                document.activeElement?.blur();
+              }}
+            />
+          )}
+
           {/* Scrollable Main Content */}
-          <main ref={scrollWrapperRef} className="flex-1 overflow-y-auto px-8 py-6 pb-36 relative z-10">
+          <main 
+            ref={scrollWrapperRef} 
+            className={`flex-1 overflow-y-auto px-8 py-6 pb-36 relative z-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              isSearchFocused ? 'blur-[4px] opacity-40 scale-[0.99] pointer-events-none' : ''
+            }`}
+          >
             <div ref={scrollContentRef} className="w-full min-h-full relative">
               <Suspense fallback={
                 <div className="flex flex-col gap-10 w-full min-h-[50vh] animate-fade-in p-4 pt-2">
@@ -528,7 +664,9 @@ export default function App() {
       />
 
       {/* Floating Capsule Player Controls */}
-      <PlayerBar />
+      <div className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${isSearchFocused ? 'blur-[4px] opacity-40 pointer-events-none' : ''}`}>
+        <PlayerBar />
+      </div>
 
       {/* Global Edit Track Modal */}
       {editingSong && (
