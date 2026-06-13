@@ -34,6 +34,14 @@ const getMediaUrl = (path) => {
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
+const getArtworkUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return `media://remote/?url=${encodeURIComponent(path)}`;
+  }
+  return `media://local/?path=${encodeURIComponent(path)}`;
+};
+
 const getHighResUrl = (url) => {
   if (!url) return '';
   if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
@@ -139,11 +147,11 @@ export default function SongList() {
     : null;
     
   if (activeView === 'songs' && appSettings?.dashboard_cover_path) {
-    viewArtwork = getMediaUrl(appSettings.dashboard_cover_path);
+    viewArtwork = getArtworkUrl(appSettings.dashboard_cover_path);
   } else if (customAlbum && customAlbum.cover_path) {
-    viewArtwork = getMediaUrl(customAlbum.cover_path);
+    viewArtwork = getArtworkUrl(customAlbum.cover_path);
   } else if (firstWithArt) {
-    viewArtwork = getHighResUrl(getMediaUrl(firstWithArt.artwork_path));
+    viewArtwork = getHighResUrl(getArtworkUrl(firstWithArt.artwork_path));
   }
 
   const totalPlaylistDuration = useMemo(() => rawSongsList.reduce((sum, s) => {
@@ -447,7 +455,7 @@ export default function SongList() {
                         <div className="w-9 h-9 rounded-md bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                           {(song.has_artwork || !!(song.artwork_path || song.coverUrl || song.thumbnail)) && (song.artwork_path || song.coverUrl || song.thumbnail) ? (
                             <img 
-                              src={getThumbnailUrl(getMediaUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
+                              src={getThumbnailUrl(getArtworkUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
                               alt={song.title}
                               className="w-full h-full object-cover"
                             />

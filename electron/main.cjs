@@ -114,14 +114,58 @@ function getMimeType(filePath) {
 
   protocol.handle('media', async (request) => {
     try {
-      let filePath = '';
-      try {
-        const urlObj = new URL(request.url);
-        filePath = urlObj.searchParams.get('path');
-      } catch (e) {
-        // Ignore URL parse error
+      const urlObj = new URL(request.url);
+      
+      if (urlObj.host === 'remote') {
+        const remoteUrl = urlObj.searchParams.get('url');
+        if (!remoteUrl) {
+          return new Response('URL parameter missing', { status: 400 });
+        }
+        
+        // Hash the URL to get a unique filename
+        const hash = crypto.createHash('md5').update(remoteUrl).digest('hex');
+        const cacheDir = db.getArtworkDir();
+        const cachePath = path.join(cacheDir, `cache-${hash}.jpg`);
+        
+        // If cached file exists, serve it immediately!
+        if (fs.existsSync(cachePath)) {
+          const fileUrl = pathToFileURL(cachePath).toString();
+          const response = await net.fetch(fileUrl, { bypassCustomProtocolHandlers: true });
+          const responseHeaders = new Headers(response.headers);
+          responseHeaders.set('Access-Control-Allow-Origin', '*');
+          responseHeaders.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+          });
+        }
+        
+        // Otherwise, fetch from remote server
+        const response = await net.fetch(remoteUrl);
+        if (response.ok) {
+          const buffer = await response.arrayBuffer();
+          // Write to cache asynchronously to avoid blocking the response
+          fs.promises.writeFile(cachePath, Buffer.from(buffer)).catch(err => {
+            console.error('Failed to write image cache:', err);
+          });
+          
+          const responseHeaders = new Headers();
+          responseHeaders.set('Access-Control-Allow-Origin', '*');
+          responseHeaders.set('Content-Type', response.headers.get('Content-Type') || 'image/jpeg');
+          responseHeaders.set('Cache-Control', 'public, max-age=31536000, immutable');
+          
+          return new Response(buffer, {
+            status: 200,
+            headers: responseHeaders
+          });
+        } else {
+          return new Response('Failed to fetch remote resource', { status: response.status });
+        }
       }
-
+      
+      // Handle local files
+      let filePath = urlObj.searchParams.get('path');
       if (!filePath) {
         // Fallback for old style URL
         try {

@@ -32,6 +32,14 @@ const getMediaUrl = (path) => {
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
+const getArtworkUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return `media://remote/?url=${encodeURIComponent(path)}`;
+  }
+  return `media://local/?path=${encodeURIComponent(path)}`;
+};
+
 const getClientX = (e) => {
   if (e.clientX !== undefined) return e.clientX;
   if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
@@ -452,7 +460,7 @@ export default function PlayerBar() {
         >
           {currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail ? (
             <img 
-              src={getMediaUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail)}
+              src={getArtworkUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail)}
               alt={currentSong.title}
               className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105"
             />
