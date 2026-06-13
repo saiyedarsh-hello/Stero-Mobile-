@@ -14,7 +14,9 @@ import {
   Disc,
   Headphones,
   Flame,
-  MoreHorizontal
+  MoreHorizontal,
+  Check,
+  AlertCircle
 } from 'lucide-react';
 
 const getMediaUrl = (path) => {
@@ -33,6 +35,8 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     setActiveView,
     downloadState,
     cancelDownload,
+    clearCompletedDownload,
+    clearAllCompletedDownloads,
     dominantColor,
     activeTrack,
     queue,
@@ -164,33 +168,90 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
             }`}
           >
             <div className={`bg-white/[0.05] border border-white/10 rounded-xl p-3 relative z-50 backdrop-blur-2xl transition-transform duration-500 ${isDownloadsOpen ? 'translate-y-0 scale-100' : '-translate-y-4 scale-95'}`}>
-              <span className="text-[9px] uppercase tracking-[0.15em] text-white/40 font-bold block mb-2 px-1">Downloads</span>
-              {downloadState?.active?.length > 0 ? (
-                <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-[9px] uppercase tracking-[0.15em] text-white/40 font-bold">Downloads</span>
+                {downloadState?.completed?.length > 0 && (
+                  <button 
+                    onClick={clearAllCompletedDownloads}
+                    className="text-[9px] text-gray-500 hover:text-white transition-colors font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+              {(downloadState?.active?.length > 0 || downloadState?.completed?.length > 0) ? (
+                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 hide-scrollbar">
+                  {/* Active Downloads */}
                   {downloadState.active.map(job => {
                     const coverImg = job.thumbnail || job.coverUrl || job.artwork_path;
                     return (
-                    <div key={job.videoId} className="flex items-center gap-2 mb-1.5 bg-black/20 p-2 rounded-lg border border-white/5">
-                      {coverImg ? (
-                        <img src={getMediaUrl(coverImg)} alt="" className="w-8 h-8 rounded object-cover" />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center">
-                          <CloudDownload size={14} className="text-gray-400" />
+                      <div key={job.videoId} className="flex items-center gap-2 mb-1 bg-black/20 p-2 rounded-lg border border-white/5">
+                        {coverImg ? (
+                          <img src={getMediaUrl(coverImg)} alt="" className="w-8 h-8 rounded object-cover" />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center">
+                            <CloudDownload size={14} className="text-gray-400" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold text-white truncate">{job.title}</p>
+                          <div className="flex justify-between items-center mt-0.5">
+                            <p className="text-[9px] text-gray-400 truncate max-w-[70%]">{job.artist}</p>
+                            <span className="text-[9px] text-blue-400 font-semibold">{Math.round(job.progress)}%</span>
+                          </div>
                         </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-semibold text-white truncate">{job.title}</p>
-                        <p className="text-[9px] text-gray-400 truncate">{job.artist}</p>
+                        <button 
+                          onClick={() => cancelDownload(job.videoId)}
+                          className="p-1 text-gray-500 hover:text-red-400 hover:bg-white/10 rounded transition-colors cursor-pointer"
+                          title="Cancel Download"
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => cancelDownload(job.videoId)}
-                        className="p-1 text-gray-500 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
-                        title="Cancel Download"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  )})}
+                    );
+                  })}
+
+                  {/* Completed / Failed Downloads */}
+                  {downloadState.completed?.map(job => {
+                    const coverImg = job.thumbnail || job.coverUrl || job.artwork_path;
+                    const isSuccess = job.status === 'completed';
+                    return (
+                      <div key={job.videoId} className="flex items-center gap-2 mb-1 bg-black/20 p-2 rounded-lg border border-white/5">
+                        {coverImg ? (
+                          <img src={getMediaUrl(coverImg)} alt="" className="w-8 h-8 rounded object-cover animate-fade-in" />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center">
+                            <CloudDownload size={14} className="text-gray-400" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold text-white/70 truncate">{job.title}</p>
+                          <div className="flex justify-between items-center mt-0.5">
+                            <p className="text-[9px] text-gray-500 truncate max-w-[70%]">{job.artist}</p>
+                            <span className={`text-[9px] font-semibold flex items-center gap-0.5 ${isSuccess ? 'text-green-400' : 'text-red-400'}`}>
+                              {isSuccess ? (
+                                <>
+                                  <Check size={10} strokeWidth={3} /> Done
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle size={10} /> Failed
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => clearCompletedDownload(job.videoId)}
+                          className="p-1 text-gray-600 hover:text-white hover:bg-white/5 rounded transition-colors cursor-pointer"
+                          title="Dismiss"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+
                   {downloadState.queue?.length > 0 && (
                     <div className="text-center text-[10px] text-gray-500 mt-1 font-medium">
                       +{downloadState.queue.length} in queue
@@ -199,7 +260,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
                 </div>
               ) : (
                 <div className="text-center text-[10px] text-gray-500 py-4 font-medium">
-                  No active downloads
+                  No downloads
                 </div>
               )}
             </div>
