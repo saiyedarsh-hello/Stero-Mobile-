@@ -124,15 +124,6 @@ export default function MusicSection() {
     return () => { isMounted = false; };
   }, [languageString, fetchTrendingArtists, fetchTrendingSongs, activeView, trendingSongs.length, artists.length, setTrendingData]);
   
-  // Reset scroll positions when search results or trending data changes
-  useEffect(() => {
-    if (artistScrollRef.current) artistScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-    if (songScrollRef.current) songScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-  }, [ytSearchResults, ytArtistSearchResults, trendingSongs, artists]);
-  
-
-
-
   let displayArtists = [];
   if (ytArtistSearchResults) {
     displayArtists = [...ytArtistSearchResults];
@@ -149,6 +140,28 @@ export default function MusicSection() {
       }
     });
   }
+
+  // Reset scroll positions ONLY when search results or trending data content actually changes
+  const prevFirstArtistId = useRef(null);
+  const prevFirstSongId = useRef(null);
+
+  useEffect(() => {
+    const currentFirstArtistId = displayArtists[0]?.id || displayArtists[0]?.browseId || null;
+    const currentFirstSongId = (ytSearchResults || trendingSongs)[0]?.videoId || null;
+
+    if (currentFirstArtistId !== prevFirstArtistId.current) {
+      if (artistScrollRef.current) {
+        artistScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+      prevFirstArtistId.current = currentFirstArtistId;
+    }
+    if (currentFirstSongId !== prevFirstSongId.current) {
+      if (songScrollRef.current) {
+        songScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+      prevFirstSongId.current = currentFirstSongId;
+    }
+  }, [displayArtists, ytSearchResults, trendingSongs]);
 
   return (
     <div className="flex flex-col gap-10 select-none animate-fade-in pb-10">
