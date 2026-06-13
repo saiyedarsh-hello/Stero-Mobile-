@@ -19,6 +19,8 @@ import {
   Search
 } from 'lucide-react';
 import EditHeroModal from './EditHeroModal';
+import RetryImage from './RetryImage';
+
 
 const formatDuration = (seconds) => {
   if (typeof seconds === 'string' && seconds.includes(':')) return seconds;
@@ -46,20 +48,20 @@ const getHighResUrl = (url) => {
   if (!url) return '';
   if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
     if (url.includes('=')) {
-      return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+      return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
     }
   }
-  return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+  return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
 };
 
 const getThumbnailUrl = (url) => {
   if (!url) return '';
   if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
     if (url.includes('=')) {
-      return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+      return url.replace(/=w\d+-h\d+/i, '=w300-h300');
     }
   }
-  return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+  return url.replace(/=w\d+-h\d+/i, '=w300-h300');
 };
 
 export default function SongList() {
@@ -151,7 +153,7 @@ export default function SongList() {
   } else if (customAlbum && customAlbum.cover_path) {
     viewArtwork = getArtworkUrl(customAlbum.cover_path);
   } else if (firstWithArt) {
-    viewArtwork = getHighResUrl(getArtworkUrl(firstWithArt.artwork_path));
+    viewArtwork = getArtworkUrl(getHighResUrl(firstWithArt.artwork_path));
   }
 
   const totalPlaylistDuration = useMemo(() => rawSongsList.reduce((sum, s) => {
@@ -454,10 +456,10 @@ export default function SongList() {
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-md bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                           {(song.has_artwork || !!(song.artwork_path || song.coverUrl || song.thumbnail)) && (song.artwork_path || song.coverUrl || song.thumbnail) ? (
-                            <img 
-                              src={getThumbnailUrl(getArtworkUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
+                            <RetryImage 
+                              src={getArtworkUrl(getThumbnailUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
                               alt={song.title}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full"
                             />
                           ) : (
                             <Disc size={16} className={isCurrent ? 'text-white/60' : 'text-white/20'} />

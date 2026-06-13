@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import RetryImage from './RetryImage';
+
 import { 
   Play, 
   Pause, 
@@ -39,6 +41,17 @@ const getArtworkUrl = (path) => {
   }
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
+
+const getHighResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
+};
+
 
 const getClientX = (e) => {
   if (e.clientX !== undefined) return e.clientX;
@@ -459,10 +472,10 @@ export default function PlayerBar() {
           title="Toggle Canvas Visualizer"
         >
           {currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail ? (
-            <img 
-              src={getArtworkUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail)}
+            <RetryImage 
+              src={getArtworkUrl(getHighResUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail))}
               alt={currentSong.title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105"
+              className="w-full h-full transition-transform duration-500 group-hover/art:scale-105"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white/40">
