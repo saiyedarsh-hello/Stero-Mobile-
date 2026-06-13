@@ -22,6 +22,26 @@ const getHighResUrl = (url) => {
   return url.replace(/=w\d+-h\d+/i, '=w512-h512');
 };
 
+const getMediumResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w226-h226');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w226-h226');
+};
+
+const getThumbnailUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+};
+
 export default function MusicSection() {
   const { 
     appSettings, 
@@ -169,7 +189,7 @@ export default function MusicSection() {
             >
               <div className="w-24 h-24 rounded-full overflow-hidden border border-white/5 shadow-lg group-hover:scale-105 group-active:scale-95 transition-all duration-300 relative isolate">
                 {artist.imageUrl || artist.thumbnail ? (
-                  <RetryImage src={getHighResUrl(artist.imageUrl || artist.thumbnail)} alt={artist.name} loading="lazy" className="w-full h-full object-cover" />
+                  <RetryImage src={getThumbnailUrl(artist.imageUrl || artist.thumbnail)} alt={artist.name} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-white/10 flex items-center justify-center">
                     <Disc size={30} className="text-white/40" />
@@ -253,7 +273,7 @@ export default function MusicSection() {
                   >
                     <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                       {(song.coverUrl || song.thumbnail) ? (
-                        <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                        <RetryImage src={getMediumResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
                           <Disc size={40} className="text-white/20" />
@@ -362,7 +382,7 @@ export default function MusicSection() {
                 >
                   <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                     {(song.coverUrl || song.thumbnail) ? (
-                      <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                      <RetryImage src={getMediumResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
                         <Disc size={40} className="text-white/20" />

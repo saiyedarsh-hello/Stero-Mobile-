@@ -44,6 +44,16 @@ const getHighResUrl = (url) => {
   return url.replace(/=w\d+-h\d+/i, '=w512-h512');
 };
 
+const getThumbnailUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w120-h120');
+};
+
 export default function SongList() {
   const {
     songs,
@@ -437,7 +447,7 @@ export default function SongList() {
                         <div className="w-9 h-9 rounded-md bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                           {(song.has_artwork || !!(song.artwork_path || song.coverUrl || song.thumbnail)) && (song.artwork_path || song.coverUrl || song.thumbnail) ? (
                             <img 
-                              src={getHighResUrl(getMediaUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
+                              src={getThumbnailUrl(getMediaUrl(song.artwork_path || song.coverUrl || song.thumbnail))}
                               alt={song.title}
                               className="w-full h-full object-cover"
                             />
