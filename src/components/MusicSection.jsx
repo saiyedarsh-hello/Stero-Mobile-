@@ -10,16 +10,44 @@ const getMediaUrl = (path) => {
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
 
+const getArtworkUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return `media://remote/?url=${encodeURIComponent(path)}`;
+  }
+  return `media://local/?path=${encodeURIComponent(path)}`;
+};
+
 const getHighResUrl = (url) => {
   if (!url) return '';
   // Match the width and height part (e.g. =w120-h120 or =w60-h60) and replace it
   // This preserves other flags like -p-l90-rj which might be required for some Google user content URLs.
   if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
     if (url.includes('=')) {
-      return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+      return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
     }
   }
-  return url.replace(/=w\d+-h\d+/i, '=w512-h512');
+  return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
+};
+
+const getMediumResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w600-h600');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w600-h600');
+};
+
+const getThumbnailUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w300-h300');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w300-h300');
 };
 
 export default function MusicSection() {
@@ -96,15 +124,6 @@ export default function MusicSection() {
     return () => { isMounted = false; };
   }, [languageString, fetchTrendingArtists, fetchTrendingSongs, activeView, trendingSongs.length, artists.length, setTrendingData]);
   
-  // Reset scroll positions when search results or trending data changes
-  useEffect(() => {
-    if (artistScrollRef.current) artistScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-    if (songScrollRef.current) songScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-  }, [ytSearchResults, ytArtistSearchResults, trendingSongs, artists]);
-  
-
-
-
   let displayArtists = [];
   if (ytArtistSearchResults) {
     displayArtists = [...ytArtistSearchResults];
@@ -121,6 +140,28 @@ export default function MusicSection() {
       }
     });
   }
+
+  // Reset scroll positions ONLY when search results or trending data content actually changes
+  const prevFirstArtistId = useRef(null);
+  const prevFirstSongId = useRef(null);
+
+  useEffect(() => {
+    const currentFirstArtistId = displayArtists[0]?.id || displayArtists[0]?.browseId || null;
+    const currentFirstSongId = (ytSearchResults || trendingSongs)[0]?.videoId || null;
+
+    if (currentFirstArtistId !== prevFirstArtistId.current) {
+      if (artistScrollRef.current) {
+        artistScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+      prevFirstArtistId.current = currentFirstArtistId;
+    }
+    if (currentFirstSongId !== prevFirstSongId.current) {
+      if (songScrollRef.current) {
+        songScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+      prevFirstSongId.current = currentFirstSongId;
+    }
+  }, [displayArtists, ytSearchResults, trendingSongs]);
 
   return (
     <div className="flex flex-col gap-10 select-none animate-fade-in pb-10">
@@ -169,7 +210,7 @@ export default function MusicSection() {
             >
               <div className="w-24 h-24 rounded-full overflow-hidden border border-white/5 shadow-lg group-hover:scale-105 group-active:scale-95 transition-all duration-300 relative isolate">
                 {artist.imageUrl || artist.thumbnail ? (
-                  <RetryImage src={getHighResUrl(artist.imageUrl || artist.thumbnail)} alt={artist.name} loading="lazy" className="w-full h-full object-cover" />
+                  <RetryImage src={getArtworkUrl(getThumbnailUrl(artist.imageUrl || artist.thumbnail))} alt={artist.name} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-white/10 flex items-center justify-center">
                     <Disc size={30} className="text-white/40" />
@@ -253,7 +294,7 @@ export default function MusicSection() {
                   >
                     <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                       {(song.coverUrl || song.thumbnail) ? (
-                        <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                        <RetryImage src={getArtworkUrl(getMediumResUrl(song.coverUrl || song.thumbnail))} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
                           <Disc size={40} className="text-white/20" />
@@ -362,7 +403,7 @@ export default function MusicSection() {
                 >
                   <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
                     {(song.coverUrl || song.thumbnail) ? (
-                      <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                      <RetryImage src={getArtworkUrl(getMediumResUrl(song.coverUrl || song.thumbnail))} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
                         <Disc size={40} className="text-white/20" />

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
+import RetryImage from './RetryImage';
+
 import { 
   Play, 
   Pause, 
@@ -31,6 +33,25 @@ const getMediaUrl = (path) => {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `media://local/?path=${encodeURIComponent(path)}`;
 };
+
+const getArtworkUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return `media://remote/?url=${encodeURIComponent(path)}`;
+  }
+  return `media://local/?path=${encodeURIComponent(path)}`;
+};
+
+const getHighResUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('googleusercontent.com') || url.includes('ggpht.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
+    }
+  }
+  return url.replace(/=w\d+-h\d+/i, '=w1024-h1024');
+};
+
 
 const getClientX = (e) => {
   if (e.clientX !== undefined) return e.clientX;
@@ -401,19 +422,22 @@ export default function PlayerBar() {
   const lastErrorRef = useRef(0);
 
   const handleError = (e) => {
+    const state = usePlayerStore.getState();
+    // If there is no active track, ignore any audio element source errors on mount
+    if (!state.activeTrack) return;
+
     console.error('Audio playback error:', e);
 
     // Debounce: prevent rapid auto-skipping if multiple tracks fail in a row
     const now = Date.now();
     if (now - lastErrorRef.current < 3000) {
       console.warn('Playback error throttled — stopping to prevent infinite skip loop');
-      usePlayerStore.getState().togglePlay(); // Just stop playback
+      state.togglePlay(); // Just stop playback
       return;
     }
     lastErrorRef.current = now;
 
     // Gracefully skip to the next track if the current track file becomes unavailable (e.g. deleted)
-    const state = usePlayerStore.getState();
     if (state.queue && state.queue.length > 1) {
       state.nextTrack();
     } else {
@@ -448,10 +472,10 @@ export default function PlayerBar() {
           title="Toggle Canvas Visualizer"
         >
           {currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail ? (
-            <img 
-              src={getMediaUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail)}
+            <RetryImage 
+              src={getArtworkUrl(getHighResUrl(currentSong.artwork_path || currentSong.coverUrl || currentSong.thumbnail))}
               alt={currentSong.title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover/art:scale-105"
+              className="w-full h-full transition-transform duration-500 group-hover/art:scale-105"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white/40">
