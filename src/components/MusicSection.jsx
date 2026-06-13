@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { ChevronLeft, ChevronRight, Play, Heart, Disc, Plus, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Heart, Disc, Plus, Check, CloudDownload } from 'lucide-react';
 import LanguageModal from './LanguageModal';
 import RetryImage from './RetryImage';
 
@@ -42,7 +42,9 @@ export default function MusicSection() {
     songs: allSongs, // Need this to check if a stream is already in the DB favorites
     followedArtists,
     followedArtistSongs,
-    toggleFollowArtist
+    toggleFollowArtist,
+    downloadState,
+    startDownload
   } = usePlayerStore();
 
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -230,51 +232,82 @@ export default function MusicSection() {
                 </div>
               ))
             ) : (
-              followedArtistSongs.map((song, i) => (
-              <div 
-                key={song.videoId + '-' + i} 
-                onClick={() => playTrack(song, followedArtistSongs)}
-                onMouseEnter={() => preloadTrack(song)}
-                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
-              >
-                <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
-                  {(song.coverUrl || song.thumbnail) ? (
-                    <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
-                      <Disc size={40} className="text-white/20" />
+              followedArtistSongs.map((song, i) => {
+                const dbSong = allSongs?.find(s => s.filepath === `yt-stream://${song.videoId}`);
+                const isFav = dbSong?.favorite === 1;
+                const isDownloaded = allSongs?.some(s => 
+                  s.filepath && 
+                  !s.filepath.startsWith('yt-stream://') && 
+                  s.title?.toLowerCase() === song.title?.toLowerCase() &&
+                  s.artist?.toLowerCase() === song.artist?.toLowerCase()
+                );
+                const isDownloading = downloadState?.active?.some(job => job.videoId === song.videoId) || 
+                                      downloadState?.queue?.some(job => job.videoId === song.videoId);
+
+                return (
+                  <div 
+                    key={song.videoId + '-' + i} 
+                    onClick={() => playTrack(song, followedArtistSongs)}
+                    onMouseEnter={() => preloadTrack(song)}
+                    className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
+                  >
+                    <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
+                      {(song.coverUrl || song.thumbnail) ? (
+                        <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
+                          <Disc size={40} className="text-white/20" />
+                        </div>
+                      )}
+                      {/* Hover Overlay Buttons & Play */}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20">
+                          {isDownloaded ? (
+                            <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-green-400 shadow-lg border border-white/10" title="Downloaded">
+                              <Check size={12} strokeWidth={3} />
+                            </div>
+                          ) : isDownloading ? (
+                            <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-blue-400 shadow-lg border border-white/10" title="Downloading...">
+                              <CloudDownload size={12} className="animate-pulse" />
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startDownload(song);
+                              }}
+                              className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:scale-115 active:scale-95 transition-all shadow-lg border border-white/10"
+                              title="Download to library"
+                            >
+                              <CloudDownload size={12} />
+                            </button>
+                          )}
+
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(dbSong?.id || song.videoId, isFav ? 0 : 1, song);
+                            }}
+                            className={`w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center hover:scale-115 active:scale-95 transition-all shadow-lg border border-white/10 ${
+                              isFav ? 'text-red-500' : 'text-white/80 hover:text-white'
+                            }`}
+                            title={isFav ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Heart size={12} fill={isFav ? "currentColor" : "none"} />
+                          </button>
+                        </div>
+                        <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                          <Play size={20} className="text-black ml-1" fill="currentColor" />
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {/* Hover Overlay Play Button */}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                      <Play size={20} className="text-black ml-1" fill="currentColor" />
+                    <div className="flex flex-col min-w-0 px-1">
+                      <span className="text-sm font-bold text-white truncate">{song.title}</span>
+                      <span className="text-xs text-gray-400 truncate">{song.artist}</span>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-start justify-between gap-2 px-1">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold text-white truncate">{song.title}</span>
-                    <span className="text-xs text-gray-400 truncate">{song.artist}</span>
-                  </div>
-                  {(() => {
-                    const dbSong = allSongs?.find(s => s.filepath === `yt-stream://${song.videoId}`);
-                    const isFav = dbSong?.favorite === 1;
-                    return (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(dbSong?.id || song.videoId, isFav ? 0 : 1, song);
-                        }}
-                        className={`mt-0.5 text-white/50 hover:text-white hover:scale-110 active:scale-90 transition-all ${isFav ? 'text-white' : ''}`}
-                      >
-                        <Heart size={14} fill={isFav ? "currentColor" : "none"} />
-                      </button>
-                    );
-                  })()}
-                </div>
-              </div>
-            )))}
+                );
+              }))}
           </div>
         </section>
       )}
@@ -308,51 +341,82 @@ export default function MusicSection() {
               </div>
             ))
           ) : (
-            (ytSearchResults || trendingSongs).map((song) => (
-            <div 
-              key={song.videoId} 
-              onClick={() => playTrack(song, ytSearchResults || trendingSongs)}
-              onMouseEnter={() => preloadTrack(song)}
-              className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
-            >
-              <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
-                {(song.coverUrl || song.thumbnail) ? (
-                  <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
-                    <Disc size={40} className="text-white/20" />
+            (ytSearchResults || trendingSongs).map((song) => {
+              const dbSong = allSongs?.find(s => s.filepath === `yt-stream://${song.videoId}`);
+              const isFav = dbSong?.favorite === 1;
+              const isDownloaded = allSongs?.some(s => 
+                s.filepath && 
+                !s.filepath.startsWith('yt-stream://') && 
+                s.title?.toLowerCase() === song.title?.toLowerCase() &&
+                s.artist?.toLowerCase() === song.artist?.toLowerCase()
+              );
+              const isDownloading = downloadState?.active?.some(job => job.videoId === song.videoId) || 
+                                    downloadState?.queue?.some(job => job.videoId === song.videoId);
+
+              return (
+                <div 
+                  key={song.videoId} 
+                  onClick={() => playTrack(song, ytSearchResults || trendingSongs)}
+                  onMouseEnter={() => preloadTrack(song)}
+                  className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
+                >
+                  <div className="w-44 h-56 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
+                    {(song.coverUrl || song.thumbnail) ? (
+                      <RetryImage src={getHighResUrl(song.coverUrl || song.thumbnail)} fallbackSrc={song.coverUrl || song.thumbnail} alt={song.title} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
+                        <Disc size={40} className="text-white/20" />
+                      </div>
+                    )}
+                    {/* Hover Overlay Buttons & Play */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20">
+                        {isDownloaded ? (
+                          <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-green-400 shadow-lg border border-white/10" title="Downloaded">
+                            <Check size={12} strokeWidth={3} />
+                          </div>
+                        ) : isDownloading ? (
+                          <div className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-blue-400 shadow-lg border border-white/10" title="Downloading...">
+                            <CloudDownload size={12} className="animate-pulse" />
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startDownload(song);
+                            }}
+                            className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:scale-110 active:scale-95 transition-all shadow-lg border border-white/10"
+                            title="Download to library"
+                          >
+                            <CloudDownload size={12} />
+                          </button>
+                        )}
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(dbSong ? dbSong.id : song.videoId, isFav ? 0 : 1, song);
+                          }}
+                          className={`w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center hover:scale-115 active:scale-95 transition-all shadow-lg border border-white/10 ${
+                            isFav ? 'text-red-500' : 'text-white/80 hover:text-white'
+                          }`}
+                          title={isFav ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Heart size={12} fill={isFav ? "currentColor" : "none"} />
+                        </button>
+                      </div>
+                      <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                        <Play size={20} className="text-black ml-1" fill="currentColor" />
+                      </div>
+                    </div>
                   </div>
-                )}
-                {/* Hover Overlay Play Button */}
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                    <Play size={20} className="text-black ml-1" fill="currentColor" />
+                  <div className="flex flex-col min-w-0 px-1">
+                    <span className="text-sm font-bold text-white truncate">{song.title}</span>
+                    <span className="text-xs text-gray-400 truncate">{song.artist}</span>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-start justify-between gap-2 px-1">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold text-white truncate">{song.title}</span>
-                  <span className="text-xs text-gray-400 truncate">{song.artist}</span>
-                </div>
-                {(() => {
-                  const dbSong = allSongs?.find(s => s.filepath === `yt-stream://${song.videoId}`);
-                  const isFav = dbSong?.favorite === 1;
-                  return (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(dbSong ? dbSong.id : song.videoId, isFav ? 0 : 1, song);
-                      }}
-                      className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5 active:scale-90"
-                    >
-                      <Heart size={14} className={isFav ? 'text-red-500' : ''} fill={isFav ? 'currentColor' : 'none'} />
-                    </button>
-                  );
-                })()}
-              </div>
-            </div>
-          )))}
+              );
+            }))}
         </div>
       </section>
 
