@@ -46,7 +46,8 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     playTrack,
     nextTrack,
     prevTrack,
-    isPlaying
+    isPlaying,
+    selectedAlbumId
   } = usePlayerStore(useShallow(state => ({
     activeView: state.activeView,
     setActiveView: state.setActiveView,
@@ -62,7 +63,8 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
     playTrack: state.playTrack,
     nextTrack: state.nextTrack,
     prevTrack: state.prevTrack,
-    isPlaying: state.isPlaying
+    isPlaying: state.isPlaying,
+    selectedAlbumId: state.selectedAlbumId
   })));
 
   const sidebarScrollRef = useRef(null);
@@ -289,9 +291,11 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }) {
             <nav className="flex flex-col gap-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
+                const isYtAlbum = typeof selectedAlbumId === 'string';
                 const isActive = activeView === item.id || 
                   (item.id === 'dashboard' && activeView === 'visualizer') ||
-                  (item.id === 'albums' && (activeView === 'album-detail' || activeView === 'playlist-detail'));
+                  (item.id === 'music' && activeView === 'album-detail' && isYtAlbum) ||
+                  (item.id === 'albums' && ((activeView === 'album-detail' && !isYtAlbum) || activeView === 'playlist-detail'));
                 return (
                   <button
                     key={item.id}

@@ -100,9 +100,15 @@ export const usePlayerStore = create((set, get) => ({
   ytArtistSearchResults: null,
   setYtArtistSearchResults: (results) => set({ ytArtistSearchResults: results }),
   
+  ytAlbumSearchResults: null,
+  setYtAlbumSearchResults: (results) => set({ ytAlbumSearchResults: results }),
+  
+  ytActiveAlbum: null,
+  
   // Followed Artists
   followedArtists: [],
   followedArtistSongs: [],
+  followedArtistAlbums: [],
   
   // Navigation & View
   activeView: 'music', // 'songs', 'favorites', 'playlist-detail', 'album-detail', 'downloads'
@@ -258,6 +264,31 @@ export const usePlayerStore = create((set, get) => ({
     }
   },
 
+  fetchFollowedArtistsAlbums: async (artists) => {
+    if (!window.electron || !artists || artists.length === 0) {
+      set({ followedArtistAlbums: [] });
+      return;
+    }
+    
+    try {
+      const promises = artists.map(artist => window.electron.ytGetArtistAlbums(artist.id || artist.browseId));
+      const results = await Promise.all(promises);
+      
+      let combined = [];
+      results.forEach((res, index) => {
+         if (res && res.length > 0) {
+            combined = combined.concat(res);
+         }
+      });
+      
+      // Shuffle albums so it's not all from one artist
+      combined.sort(() => Math.random() - 0.5);
+      set({ followedArtistAlbums: combined });
+    } catch (err) {
+      console.error("Failed to fetch followed artist albums", err);
+    }
+  },
+
   toggleFollowArtist: (artist) => {
     const { followedArtists } = get();
     const isFollowed = followedArtists.some(a => (a.id || a.browseId) === (artist.id || artist.browseId));
@@ -273,6 +304,70 @@ export const usePlayerStore = create((set, get) => ({
     localStorage.setItem('stero-followed-artists', JSON.stringify(newFollowed));
     
     get().fetchFollowedArtistsSongs(newFollowed);
+    get().fetchFollowedArtistsAlbums(newFollowed);
+  },
+
+  viewYtAlbum: async (albumId, albumName) => {
+    // Navigate to album-detail and clear active album while loading
+    get().setActiveView('album-detail', { albumId, albumName });
+    set({ 
+      ytActiveAlbum: { loading: true, tracks: [] }
+    });
+    
+    if (!window.electron) return;
+    
+    try {
+      const albumData = await window.electron.ytGetAlbum(albumId);
+      if (albumData) {
+        set({ ytActiveAlbum: { loading: false, data: albumData, tracks: albumData.tracks } });
+      } else {
+        set({ ytActiveAlbum: { loading: false, error: 'Failed to load album', tracks: [] } });
+      }
+    } catch (e) {
+      console.error('Failed to view YT album', e);
+      set({ ytActiveAlbum: { loading: false, error: e.message, tracks: [] } });
+    }
+  },
+
+  addYtAlbumToLibrary: async (albumData, tracks) => {
+    if (!window.electron) return;
+    try {
+      const songIds = [];
+      const currentSongs = get().songs;
+      for (const track of tracks) {
+        const vId = track.videoId || track.id;
+        // check if already in db
+        const existing = currentSongs.find(s => s.filepath === `yt-stream://${vId}`);
+        if (existing && existing.id) {
+          songIds.push(existing.id);
+        } else {
+          // Add to DB
+          const savedTrack = await window.electron.addStreamSongToDb({
+            videoId: vId,
+            title: track.title,
+            artist: track.artist,
+            album: track.album || albumData.title,
+            artwork_path: track.coverUrl || track.thumbnail,
+            has_artwork: !!(track.coverUrl || track.thumbnail),
+            duration: track.duration,
+            filepath: `yt-stream://${vId}`,
+            favorite: 0,
+            isStream: true
+          });
+          if (savedTrack && savedTrack.id) {
+            songIds.push(savedTrack.id);
+            set(state => ({ songs: [...state.songs, savedTrack] }));
+          }
+        }
+      }
+      
+      if (songIds.length > 0) {
+        await get().createCustomAlbum(albumData.title, albumData.coverUrl || '', songIds);
+        await get().fetchLibrary();
+      }
+    } catch (err) {
+      console.error('Failed to add YT album to library', err);
+    }
   },
 
   fetchLibrary: async () => {
@@ -346,6 +441,7 @@ export const usePlayerStore = create((set, get) => ({
         const parsed = JSON.parse(followed);
         set({ followedArtists: parsed });
         get().fetchFollowedArtistsSongs(parsed);
+        get().fetchFollowedArtistsAlbums(parsed);
       }
     } catch (e) {
       console.warn('Failed to restore followed artists:', e);

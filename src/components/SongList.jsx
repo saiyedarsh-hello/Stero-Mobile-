@@ -17,7 +17,8 @@ import {
   Disc,
   CloudDownload,
   ListMusic,
-  Search
+  Search,
+  Plus
 } from 'lucide-react';
 import EditHeroModal from './EditHeroModal';
 import RetryImage from './RetryImage';
@@ -85,7 +86,9 @@ export default function SongList() {
     setEditingPlaylist,
     deleteSong,
     appSettings,
-    dominantColor
+    dominantColor,
+    ytActiveAlbum,
+    addYtAlbumToLibrary
   } = usePlayerStore(useShallow(state => ({
     songs: state.songs,
     customAlbums: state.customAlbums,
@@ -105,7 +108,9 @@ export default function SongList() {
     setEditingPlaylist: state.setEditingPlaylist,
     deleteSong: state.deleteSong,
     appSettings: state.appSettings,
-    dominantColor: state.dominantColor
+    dominantColor: state.dominantColor,
+    ytActiveAlbum: state.ytActiveAlbum,
+    addYtAlbumToLibrary: state.addYtAlbumToLibrary
   })));
 
   const [activeMenuSongId, setActiveMenuSongId] = useState(null);
@@ -152,15 +157,18 @@ export default function SongList() {
       if (albumMatch) {
         rawSongsList = albumMatch.songs || [];
         viewTitle = albumMatch.name;
+      } else if (ytActiveAlbum && ytActiveAlbum.data && ytActiveAlbum.data.id === selectedAlbumId) {
+        rawSongsList = ytActiveAlbum.tracks || [];
+        viewTitle = ytActiveAlbum.data.title;
       } else {
         rawSongsList = songs.filter(s => s.album === selectedAlbumName);
         viewTitle = selectedAlbumName || 'Unknown Playlist';
       }
-      viewSubtitle = 'Playlist';
+      viewSubtitle = ytActiveAlbum && ytActiveAlbum.data && ytActiveAlbum.data.id === selectedAlbumId ? 'Album' : 'Playlist';
     }
 
     return { rawSongsList, viewTitle, viewSubtitle };
-  }, [activeView, songs, appSettings?.dashboard_title, customAlbums, selectedAlbumId, selectedAlbumName]);
+  }, [activeView, songs, appSettings?.dashboard_title, customAlbums, selectedAlbumId, selectedAlbumName, ytActiveAlbum]);
 
   let viewArtwork = null;
   const firstWithArt = rawSongsList.find(s => s.has_artwork && s.artwork_path);
@@ -173,6 +181,8 @@ export default function SongList() {
     viewArtwork = getArtworkUrl(appSettings.dashboard_cover_path);
   } else if (customAlbum && customAlbum.cover_path) {
     viewArtwork = getArtworkUrl(customAlbum.cover_path);
+  } else if (ytActiveAlbum && ytActiveAlbum.data && ytActiveAlbum.data.id === selectedAlbumId && ytActiveAlbum.data.coverUrl) {
+    viewArtwork = getArtworkUrl(getHighResUrl(ytActiveAlbum.data.coverUrl));
   } else if (firstWithArt) {
     viewArtwork = getArtworkUrl(getHighResUrl(firstWithArt.artwork_path));
   }
@@ -265,6 +275,15 @@ export default function SongList() {
     heroBgStyle = { backgroundColor: `hsla(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(15, dominantColor.l - 40)}%, 0.4)` };
   }
 
+  const isYtAlbumView = activeView === 'album-detail' && ytActiveAlbum && ytActiveAlbum.data && ytActiveAlbum.data.id === selectedAlbumId;
+  const isAlreadySaved = isYtAlbumView && customAlbums.some(a => a.name === ytActiveAlbum.data.title);
+
+  const handleAddToPlaylist = async () => {
+    if (isYtAlbumView && !isAlreadySaved) {
+      await addYtAlbumToLibrary(ytActiveAlbum.data, ytActiveAlbum.tracks);
+    }
+  };
+
   return (
     <div className={`flex flex-row gap-6 lg:gap-8 select-none animate-fade-in relative ${sortedSongs.length === 0 ? 'items-stretch' : 'items-start'}`}>
       {/* Merged Header Info Panel */}
@@ -352,13 +371,22 @@ export default function SongList() {
                   <span>Edit Banner</span>
                 </button>
               )}
-              {activeView === 'album-detail' && selectedAlbumId && (
+              {activeView === 'album-detail' && customAlbum && (
                 <button
                   onClick={() => setEditingPlaylist(customAlbum)}
                   className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
                 >
                   <Pencil size={12} />
                   <span>Edit</span>
+                </button>
+              )}
+              {isYtAlbumView && !isAlreadySaved && (
+                <button
+                  onClick={handleAddToPlaylist}
+                  className="flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold border border-white/10 shadow-lg transition-all duration-300 active:scale-95 cursor-pointer"
+                >
+                  <Plus size={12} />
+                  <span>Add to Playlist</span>
                 </button>
               )}
             </div>
@@ -400,21 +428,32 @@ export default function SongList() {
               data={sortedSongs}
               components={{
                 Table: ({ style, ...props }) => <table {...props} style={{...style, width: '100%', borderCollapse: 'separate', borderSpacing: 0}} className="text-left text-sm text-gray-300" />,
-                TableRow: ({ item, ...props }) => (
-                  <tr {...props} 
-                    onMouseEnter={() => {
-                      if (item && (item.isStream || (item.filepath && item.filepath.startsWith('yt-stream://')))) {
-                        preloadTrack(item);
-                      }
-                    }}
-                    className={`group transition-all ${activeTrack?.id === item?.id ? 'text-white shadow-[0_4px_20px_rgba(0,0,0,0.2)] relative z-10' : 'hover:bg-white/5'}`} 
-                    style={{ 
-                      borderRadius: '12px', 
-                      overflow: 'hidden',
-                      backgroundColor: activeTrack?.id === item?.id ? (dominantColor ? `hsl(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(40, dominantColor.l - 5)}%)` : '#FF4F6E') : undefined
-                    }} 
-                  />
-                ),
+                TableRow: ({ item, ...props }) => {
+                  const isActive = activeTrack && item && (
+                    (item.id && activeTrack.id === item.id) || 
+                    (item.videoId && (activeTrack.videoId === item.videoId || activeTrack.id === item.videoId))
+                  );
+                  return (
+                    <tr {...props} 
+                      onMouseEnter={() => {
+                        if (item && (item.isStream || (item.filepath && item.filepath.startsWith('yt-stream://')))) {
+                          preloadTrack(item);
+                        }
+                      }}
+                      className={`group transition-all duration-300 ${isActive ? 'text-white relative z-10' : 'hover:bg-white/5 text-gray-300'}`} 
+                      style={{ 
+                        borderRadius: '12px', 
+                        overflow: 'hidden',
+                        backgroundColor: isActive 
+                          ? (dominantColor ? `hsla(${dominantColor.h}, ${dominantColor.s}%, ${dominantColor.l}%, 0.15)` : 'rgba(255, 255, 255, 0.1)') 
+                          : undefined,
+                        boxShadow: isActive 
+                          ? (dominantColor ? `inset 3px 0 0 hsla(${dominantColor.h}, ${dominantColor.s}%, ${dominantColor.l}%, 1)` : 'inset 3px 0 0 #fff') 
+                          : undefined
+                      }} 
+                    />
+                  );
+                },
                 TableHead: forwardRef((props, ref) => <thead {...props} ref={ref} />),
                 TableBody: forwardRef((props, ref) => <tbody {...props} ref={ref} />),
                 Footer: () => <div className="h-28 w-full" />

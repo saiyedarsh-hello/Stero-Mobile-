@@ -170,6 +170,7 @@ export default function PlayerBar() {
   const timeTextRef = useRef(null);
   const progressBarFillRef = useRef(null);
   const progressThumbRef = useRef(null);
+  const progressGlowRef = useRef(null);
   const rafRef = useRef(null);
 
   // Auto-hide when mouse is idle
@@ -306,6 +307,9 @@ export default function PlayerBar() {
           if (progressThumbRef.current) {
             progressThumbRef.current.style.left = `${percent}%`;
           }
+          if (progressGlowRef.current) {
+            progressGlowRef.current.style.width = `${percent}%`;
+          }
         }
         
         // Save session logic (throttled to 5 seconds)
@@ -377,6 +381,7 @@ export default function PlayerBar() {
     if (timeTextRef.current) timeTextRef.current.innerText = formatTime(newTime);
     if (progressBarFillRef.current) progressBarFillRef.current.style.width = `${percentage * 100}%`;
     if (progressThumbRef.current) progressThumbRef.current.style.left = `${percentage * 100}%`;
+    if (progressGlowRef.current) progressGlowRef.current.style.width = `${percentage * 100}%`;
     
     dragTimeRef.current = newTime;
     
@@ -640,16 +645,31 @@ export default function PlayerBar() {
             className="flex-1 h-6 flex items-center cursor-pointer group/seek"
           >
             <div className="w-full h-1 bg-white/10 group-hover/seek:bg-white/20 transition-colors rounded-full relative">
+              {/* Soft diffused glow layer under the progress fill */}
+              <div 
+                ref={progressGlowRef}
+                className="progress-glow"
+                style={{
+                  backgroundColor: dominantColor
+                    ? `hsl(${dominantColor.h}, ${Math.min(80, dominantColor.s + 10)}%, ${Math.max(50, dominantColor.l + 15)}%)`
+                    : 'rgba(255, 255, 255, 0.5)',
+                }}
+              />
               <div 
                 ref={progressBarFillRef}
                 className="h-full bg-white/85 rounded-full absolute top-0 left-0"
               />
               <div 
                 ref={progressThumbRef}
-                className={`w-2.5 h-2.5 rounded-full bg-white shadow-md absolute top-1/2 transition-all duration-150 ${
+                className={`w-2.5 h-2.5 rounded-full bg-white absolute top-1/2 transition-all duration-150 ${
                   isSeeking ? 'opacity-100 scale-110' : 'opacity-0 group-hover/seek:opacity-100'
                 }`}
-                style={{ transform: 'translate(-50%, -50%)' }}
+                style={{
+                  transform: 'translate(-50%, -50%)',
+                  boxShadow: dominantColor
+                    ? `0 0 8px 2px hsla(${dominantColor.h}, ${dominantColor.s}%, ${Math.max(50, dominantColor.l + 10)}%, 0.4)`
+                    : '0 0 8px 2px rgba(255, 255, 255, 0.3)',
+                }}
               />
             </div>
           </div>

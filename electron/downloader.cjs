@@ -196,6 +196,88 @@ class Downloader {
     }
   }
 
+  async searchAlbums(query) {
+    try {
+      await this.initYTMusic();
+      const res = await this.ytmusic.searchAlbums(query);
+      const items = res ? res.slice(0, 20) : [];
+      return items.filter(r => r.albumId).map(r => ({
+        id: r.albumId,
+        browseId: r.albumId,
+        title: r.name,
+        artist: r.artist || 'Unknown Artist',
+        year: r.year || '',
+        coverUrl: Array.isArray(r.thumbnails) && r.thumbnails.length > 0
+                  ? r.thumbnails[r.thumbnails.length - 1].url
+                  : null,
+        type: 'album'
+      }));
+    } catch (err) {
+      console.error('searchAlbums error:', err);
+      return [];
+    }
+  }
+
+  async getArtistAlbums(artistId) {
+    try {
+      if (!artistId) return [];
+      await this.initYTMusic();
+      const res = await this.ytmusic.getArtist(artistId);
+      if (res && (res.topAlbums || res.topSingles)) {
+        const albums = [...(res.topAlbums || []), ...(res.topSingles || [])];
+        return albums.slice(0, 5).map(r => ({
+          id: r.albumId || r.browseId,
+          browseId: r.albumId || r.browseId,
+          title: r.name || r.title,
+          year: r.year || '',
+          coverUrl: Array.isArray(r.thumbnails) && r.thumbnails.length > 0
+                    ? r.thumbnails[r.thumbnails.length - 1].url
+                    : null,
+          artist: res.name || 'Unknown Artist',
+          type: 'album'
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.error('getArtistAlbums error for artist:', artistId, err);
+      return [];
+    }
+  }
+
+  async getAlbum(browseId) {
+    try {
+      if (!browseId) return null;
+      await this.initYTMusic();
+      const res = await this.ytmusic.getAlbum(browseId);
+      if (res) {
+        return {
+          id: browseId,
+          title: res.name || res.title,
+          artist: (res.artist && res.artist.name) || 'Unknown Artist',
+          year: res.year || '',
+          coverUrl: Array.isArray(res.thumbnails) && res.thumbnails.length > 0
+                    ? res.thumbnails[res.thumbnails.length - 1].url
+                    : null,
+          tracks: Array.isArray(res.songs) ? res.songs.map((t, i) => ({
+            videoId: t.videoId,
+            title: t.name || t.title,
+            artist: (t.artist && t.artist.name) || (res.artist && res.artist.name) || 'Unknown Artist',
+            album: (t.album && t.album.name) || res.name || res.title,
+            duration: t.duration || 0,
+            trackNumber: t.trackNumber || i + 1,
+            coverUrl: Array.isArray(t.thumbnails) && t.thumbnails.length > 0
+                    ? t.thumbnails[t.thumbnails.length - 1].url
+                    : (Array.isArray(res.thumbnails) && res.thumbnails.length > 0 ? res.thumbnails[res.thumbnails.length - 1].url : null)
+          })) : []
+        };
+      }
+      return null;
+    } catch (err) {
+      console.error('getAlbum error for browseId:', browseId, err);
+      return null;
+    }
+  }
+
   async searchTrending(query, type) {
     try {
       const api = await this.initYoutubeMusicApi();

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { usePlayerStore } from './store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import Lenis from 'lenis';
@@ -10,6 +10,11 @@ import { Search, ChevronLeft, ChevronRight, RefreshCw, Menu, FolderSearch, X, Cl
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ColorWorker from './workers/colorWorker.js?worker&inline';
+
+// ===== TOAST NOTIFICATION SYSTEM =====
+let toastId = 0;
+const TOAST_DURATION = 1500;
+const TOAST_EXIT_MS = 300;
 
 const getMediaUrl = (path) => {
   if (!path) return '';
@@ -128,6 +133,31 @@ export default function App() {
   const scrollWrapperRef = useRef(null);
   const scrollContentRef = useRef(null);
 
+  // ===== TOAST STATE =====
+  const [toasts, setToasts] = useState([]);
+  const toastTimersRef = useRef({});
+
+  const showToast = useCallback((icon, message) => {
+    const id = ++toastId;
+    setToasts((prev) => {
+      // Keep only last 2 toasts to avoid stacking too many
+      const trimmed = prev.length >= 2 ? prev.slice(-1) : prev;
+      return [...trimmed, { id, icon, message, exiting: false }];
+    });
+
+    // Start exit animation after TOAST_DURATION
+    toastTimersRef.current[id] = setTimeout(() => {
+      setToasts((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, exiting: true } : t))
+      );
+      // Remove from DOM after exit animation completes
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+        delete toastTimersRef.current[id];
+      }, TOAST_EXIT_MS);
+    }, TOAST_DURATION);
+  }, []);
+
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchHistory, setSearchHistory] = useState(() => {
     try {
@@ -245,20 +275,28 @@ export default function App() {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         prevTrack();
+        showToast('⏮', 'Previous track');
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         nextTrack();
+        showToast('⏭', 'Next track');
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setVolume(Math.min(1, volume + 0.05));
+        const newVol = Math.min(1, volume + 0.05);
+        setVolume(newVol);
         if (muted) setMuted(false);
+        showToast('🔊', `Volume ${Math.round(newVol * 100)}%`);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setVolume(Math.max(0, volume - 0.05));
+        const newVol = Math.max(0, volume - 0.05);
+        setVolume(newVol);
         if (muted) setMuted(false);
+        showToast('🔉', `Volume ${Math.round(newVol * 100)}%`);
       } else if (e.key === ' ') {
         e.preventDefault();
+        const wasPlaying = usePlayerStore.getState().isPlaying;
         togglePlay();
+        showToast(wasPlaying ? '⏸' : '▶', wasPlaying ? 'Paused' : 'Playing');
       }
     };
 
@@ -266,7 +304,7 @@ export default function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [nextTrack, prevTrack, volume, muted, setVolume, setMuted, togglePlay]);
+  }, [nextTrack, prevTrack, volume, muted, setVolume, setMuted, togglePlay, showToast]);
 
   useEffect(() => {
     // Initial fetch of library data (songs and playlists)
@@ -333,6 +371,7 @@ export default function App() {
     if (!searchQuery.trim()) {
       usePlayerStore.getState().setYtSearchResults(null);
       usePlayerStore.getState().setYtArtistSearchResults(null);
+      usePlayerStore.getState().setYtAlbumSearchResults(null);
       return;
     }
 
@@ -340,9 +379,10 @@ export default function App() {
       try {
         if (!window.electron) return;
         
-        const [results, artistResults] = await Promise.all([
+        const [results, artistResults, albumResults] = await Promise.all([
           window.electron.ytSearch(searchQuery),
-          window.electron.ytSearchTrending(searchQuery, 'artist')
+          window.electron.ytSearchTrending(searchQuery, 'artist'),
+          window.electron.ytSearchAlbums(searchQuery)
         ]);
 
         if (results && results.length > 0) {
@@ -363,6 +403,12 @@ export default function App() {
           usePlayerStore.getState().setYtArtistSearchResults(artistResults);
         } else {
           usePlayerStore.getState().setYtArtistSearchResults([]);
+        }
+
+        if (albumResults && albumResults.length > 0) {
+          usePlayerStore.getState().setYtAlbumSearchResults(albumResults);
+        } else {
+          usePlayerStore.getState().setYtAlbumSearchResults([]);
         }
       } catch (err) {
         console.error('Live search failed:', err);
@@ -717,6 +763,21 @@ export default function App() {
             onClose={() => setEditingPlaylist(null)}
           />
         </Suspense>
+      )}
+
+      {/* Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`toast-item ${toast.exiting ? 'toast-exit' : ''}`}
+            >
+              <span className="toast-icon">{toast.icon}</span>
+              <span>{toast.message}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

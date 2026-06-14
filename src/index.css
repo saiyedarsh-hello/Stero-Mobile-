@@ -12,7 +12,8 @@ body {
   overflow: hidden;
   height: 100vh;
   width: 100vw;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   background-color: transparent;
   color: #ffffff;
   user-select: none;
@@ -22,7 +23,7 @@ body {
 
 /* Smooth tabular numbers & display font */
 .font-display {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -204,4 +205,73 @@ body {
 .hide-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
+}
+
+/* ===== PREMIUM POLISH: Soft Progress Bar Glow ===== */
+.progress-glow {
+  filter: blur(6px);
+  opacity: 0.45;
+  pointer-events: none;
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 0;
+  border-radius: 999px;
+  transition: width 100ms linear;
+}
+
+/* ===== PREMIUM POLISH: Toast Notifications ===== */
+@keyframes toast-enter {
+  0% { opacity: 0; transform: translateY(16px) scale(0.95); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); }
+}
+
+@keyframes toast-exit {
+  0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); }
+  100% { opacity: 0; transform: translateY(-8px) scale(0.95); filter: blur(4px); }
+}
+
+.toast-container {
+  position: fixed;
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-item {
+  pointer-events: auto;
+  background: rgba(20, 20, 24, 0.65);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 10px 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  animation: toast-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.toast-item.toast-exit {
+  animation: toast-exit 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.toast-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1;
 }

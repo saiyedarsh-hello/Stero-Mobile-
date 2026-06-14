@@ -461,6 +461,19 @@ ipcMain.handle('yt-search-trending', async (event, query, type) => {
   return await downloader.searchTrending(query, type);
 });
 
+ipcMain.handle('yt-search-albums', async (event, query) => {
+  return await downloader.searchAlbums(query);
+});
+
+ipcMain.handle('yt-get-artist-albums', async (event, artistId) => {
+  return await downloader.getArtistAlbums(artistId);
+});
+
+ipcMain.handle('yt-get-album', async (event, browseId) => {
+  return await downloader.getAlbum(browseId);
+});
+
+
 ipcMain.handle('yt-get-stream-url', async (event, videoId) => {
   return await downloader.getStreamUrl(videoId);
 });

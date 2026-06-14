@@ -71,9 +71,13 @@ export default function MusicSection() {
     songs: allSongs, // Need this to check if a stream is already in the DB favorites
     followedArtists,
     followedArtistSongs,
+    followedArtistAlbums,
     toggleFollowArtist,
     downloadState,
-    startDownload
+    startDownload,
+    setActiveView,
+    viewYtAlbum,
+    ytAlbumSearchResults
   } = usePlayerStore(useShallow(state => ({
     appSettings: state.appSettings,
     activeTrack: state.activeTrack,
@@ -93,9 +97,13 @@ export default function MusicSection() {
     songs: state.songs,
     followedArtists: state.followedArtists,
     followedArtistSongs: state.followedArtistSongs,
+    followedArtistAlbums: state.followedArtistAlbums,
     toggleFollowArtist: state.toggleFollowArtist,
     downloadState: state.downloadState,
-    startDownload: state.startDownload
+    startDownload: state.startDownload,
+    setActiveView: state.setActiveView,
+    viewYtAlbum: state.viewYtAlbum,
+    ytAlbumSearchResults: state.ytAlbumSearchResults
   })));
 
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -107,6 +115,8 @@ export default function MusicSection() {
   const songScrollRef = useRef(null);
   const recentScrollRef = useRef(null);
   const followedScrollRef = useRef(null);
+  const followedAlbumScrollRef = useRef(null);
+  const searchAlbumScrollRef = useRef(null);
 
   const scrollContainer = (ref, direction) => {
     if (ref.current) {
@@ -142,6 +152,12 @@ export default function MusicSection() {
       
       if (activeView === 'music' && trendingSongs.length === 0 && artists.length === 0) {
         fetchAll();
+      }
+      
+      // Force fetch followed artists albums to ensure they populate
+      const followed = usePlayerStore.getState().followedArtists;
+      if (followed && followed.length > 0) {
+        usePlayerStore.getState().fetchFollowedArtistsAlbums(followed);
       }
     }
     return () => { isMounted = false; };
@@ -272,7 +288,7 @@ export default function MusicSection() {
 
       {/* 1.5 Your Songs Row (Only visible if followed artists exist) */}
       {followedArtistSongs && followedArtistSongs.length > 0 && (
-        <section className={ytSearchResults ? 'order-3' : 'order-2'}>
+        <section className={ytSearchResults ? 'order-5' : 'order-2'}>
           <div className="flex items-center justify-between mb-4 px-4">
             <h2 className="text-xl font-bold text-white tracking-tight">Your Songs</h2>
             <div className="flex items-center gap-2">
@@ -376,8 +392,53 @@ export default function MusicSection() {
         </section>
       )}
 
+      {/* 1.6 Your Albums Row (Only visible if followed artist albums exist) */}
+      {followedArtistAlbums && followedArtistAlbums.length > 0 && (
+        <section className={ytSearchResults ? 'order-6' : 'order-3'}>
+          <div className="flex items-center justify-between mb-4 px-4">
+            <h2 className="text-xl font-bold text-white tracking-tight">Your Albums</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => scrollContainer(followedAlbumScrollRef, 'left')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={() => scrollContainer(followedAlbumScrollRef, 'right')} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-transform active:scale-95">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div ref={followedAlbumScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 hide-scrollbar">
+            {followedArtistAlbums.map((album, i) => (
+              <div 
+                key={album.id + '-' + i} 
+                onClick={() => viewYtAlbum(album.id, album.title)}
+                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
+              >
+                <div className="w-44 h-44 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
+                  {album.coverUrl ? (
+                    <RetryImage src={getArtworkUrl(getMediumResUrl(album.coverUrl))} alt={album.title} loading="lazy" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
+                      <Disc size={40} className="text-white/20" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                      <Play size={20} className="text-black ml-1" fill="currentColor" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col min-w-0 px-1">
+                  <span className="text-sm font-bold text-white truncate">{album.title}</span>
+                  <span className="text-xs text-gray-400 truncate">{album.artist} {album.year ? `• ${album.year}` : ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 2. Trendy Songs Row */}
-      <section className={ytSearchResults ? 'order-2' : 'order-3'}>
+      <section className={ytSearchResults ? 'order-2' : 'order-4'}>
         <div className="flex items-center justify-between mb-4 px-4">
           <h2 className="text-xl font-bold text-white tracking-tight">
             {ytSearchResults ? 'Search Results' : 'Trendy Songs'}
@@ -484,8 +545,55 @@ export default function MusicSection() {
         </div>
       </section>
 
+      {/* 2.5 Album Search Results */}
+      {ytAlbumSearchResults && ytAlbumSearchResults.length > 0 && (
+        <section className="order-3">
+          <div className="flex items-center justify-between mb-4 px-4 mt-6">
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              Albums
+            </h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => scrollContainer(searchAlbumScrollRef, 'left')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={() => scrollContainer(searchAlbumScrollRef, 'right')} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-transform active:scale-95">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div ref={searchAlbumScrollRef} className="flex overflow-x-auto gap-6 pb-4 pt-4 px-4 -mt-4 hide-scrollbar">
+            {ytAlbumSearchResults.map((album, i) => (
+              <div 
+                key={album.id + '-' + i} 
+                onClick={() => viewYtAlbum(album.id, album.title)}
+                className="flex flex-col gap-3 flex-shrink-0 w-44 cursor-pointer group hover:z-10"
+              >
+                <div className="w-44 h-44 rounded-2xl overflow-hidden border border-white/10 shadow-xl relative transition-transform duration-300 group-hover:-translate-y-2 group-active:scale-95 isolate">
+                  {album.coverUrl ? (
+                    <RetryImage src={getArtworkUrl(getMediumResUrl(album.coverUrl))} alt={album.title} loading="lazy" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
+                      <Disc size={40} className="text-white/20" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                      <Play size={20} className="text-black ml-1" fill="currentColor" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col min-w-0 px-1">
+                  <span className="text-sm font-bold text-white truncate">{album.title}</span>
+                  <span className="text-xs text-gray-400 truncate">{album.artist} {album.year ? `• ${album.year}` : ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 3. Recently Played */}
-      <section className="order-4">
+      <section className="order-7">
         <div className="flex items-center justify-between mb-4 px-4">
           <h2 className="text-xl font-bold text-white tracking-tight">Recently Played</h2>
           <div className="flex items-center gap-2">
