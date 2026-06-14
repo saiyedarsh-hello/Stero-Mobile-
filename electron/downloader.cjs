@@ -183,7 +183,7 @@ class Downloader {
         return {
           videoId: r.videoId,
           title: r.name,
-          artist: r.artist ? r.artist.name : 'Unknown Artist',
+          artist: Array.isArray(r.artist) ? r.artist.map(a => a.name).join(', ') : (r.artist ? r.artist.name : 'Unknown Artist'),
           album: r.album ? r.album.name : 'YouTube Music',
           duration: durationStr,
           thumbnail: thumb
@@ -205,7 +205,7 @@ class Downloader {
         id: r.albumId,
         browseId: r.albumId,
         title: r.name,
-        artist: r.artist || 'Unknown Artist',
+        artist: (r.artist && r.artist.name) ? r.artist.name : (typeof r.artist === 'string' ? r.artist : 'Unknown Artist'),
         year: r.year || '',
         coverUrl: Array.isArray(r.thumbnails) && r.thumbnails.length > 0
                   ? r.thumbnails[r.thumbnails.length - 1].url
