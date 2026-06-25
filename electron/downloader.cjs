@@ -79,9 +79,9 @@ class Downloader {
 
     const args = [
       targetUrl,
-      '--format', '140/m4a/bestaudio',
+      '--format', '140/m4a/bestaudio/18/best',
       '-g',
-      '--cookies-from-browser', 'chrome+edge+firefox+opera+brave',
+      '--js-runtimes', 'node',
       '--no-warnings',
       '--no-playlist',
       '--no-check-formats',
@@ -474,7 +474,7 @@ class Downloader {
         '--audio-format', 'mp3',
         '--output', outputPath,
         '--ffmpeg-location', ffmpeg,
-        '--cookies-from-browser', 'chrome+edge+firefox+opera+brave',
+        '--js-runtimes', 'node',
         '--no-check-certificates',
         '--no-warnings',
         '--add-header', 'referer:youtube.com',
