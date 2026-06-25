@@ -1,0 +1,9 @@
+{
+  "name": "@stero/core",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "zustand": "^5.0.14"
+  }
+}
