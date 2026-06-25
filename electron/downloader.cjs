@@ -42,6 +42,22 @@ class Downloader {
     this.proxyServer.listen(this.proxyPort, '127.0.0.1', () => {
       console.log(`[Streaming Proxy] Listening on http://127.0.0.1:${this.proxyPort}`);
     });
+
+    // Run silent background auto-update for yt-dlp on startup
+    this.autoUpdateYtDlp();
+  }
+
+  autoUpdateYtDlp() {
+    const ytDlpPath = path.join(process.env.YOUTUBE_DL_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    console.log('[Downloader] Checking for yt-dlp updates in the background...');
+    const { execFile } = require('child_process');
+    execFile(ytDlpPath, ['-U'], (error, stdout, stderr) => {
+      if (error) {
+        console.error('[Downloader] Failed to auto-update yt-dlp:', error);
+      } else {
+        console.log('[Downloader] yt-dlp auto-update check completed:', stdout.trim());
+      }
+    });
   }
 
   handleStreamProxy(req, res) {
