@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@expo/ui": "~0.2.0-beta.9",
     "@expo/vector-icons": "^15.0.2",
     "expo": "~54.0.0",
@@ -38,6 +39,7 @@
   },
   "scripts": {
     "start": "expo start",
+    "stream": "node stream-server.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",

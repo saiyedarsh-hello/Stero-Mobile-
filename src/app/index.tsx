@@ -72,7 +72,7 @@ export default function DiscoverScreen() {
   const recentlyPlayed = playHistory.slice(0, 5);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 10) }]}>
       <View style={styles.header}>
         <Text style={styles.greeting}>Discover</Text>
         <View style={styles.headerIcons}>
@@ -133,7 +133,7 @@ export default function DiscoverScreen() {
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

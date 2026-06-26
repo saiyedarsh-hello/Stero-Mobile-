@@ -1,16 +1,21 @@
-import { DarkTheme, ThemeProvider, Tabs } from 'expo-router';
+import { useState } from 'react';
+import { Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import MobilePlayerBar from '@/components/MobilePlayerBar';
+import PlayerModal from '@/components/PlayerModal';
 import MobileNativeProvider from '@/providers/MobileNativeProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function RootLayout() {
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+
   return (
-    <ErrorBoundary>
-      <ThemeProvider value={DarkTheme}>
+    <SafeAreaProvider>
+      <ErrorBoundary>
         <MobileNativeProvider>
           <StatusBar style="light" />
           <View style={styles.container}>
@@ -34,14 +39,18 @@ export default function RootLayout() {
               }} 
             />
           </Tabs>
+          
+          <PlayerModal 
+            visible={isPlayerOpen} 
+            onClose={() => setIsPlayerOpen(false)} 
+          />
+
           {/* We position PlayerBar above the tabs */}
-          <View style={styles.playerBarWrapper}>
-            <MobilePlayerBar />
-          </View>
+          <MobilePlayerBar onPress={() => setIsPlayerOpen(true)} />
         </View>
-      </MobileNativeProvider>
-    </ThemeProvider>
-    </ErrorBoundary>
+        </MobileNativeProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
@@ -49,11 +58,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  playerBarWrapper: {
-    position: 'absolute',
-    bottom: 48, // approximate height of tab bar
-    left: 0,
-    right: 0,
   }
 });
