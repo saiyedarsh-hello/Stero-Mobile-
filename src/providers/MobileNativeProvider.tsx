@@ -7,8 +7,7 @@ import Constants from 'expo-constants';
 let ytApiInstance: any = null;
 
 // ─────────────────────────────────────────────────────────────
-// Global seek hook — lets the player UI seek without needing
-// to pass refs through props.
+// Global seek hook
 // ─────────────────────────────────────────────────────────────
 type SeekFn = (positionSeconds: number) => void;
 let __globalSeekTo: SeekFn | null = null;
@@ -17,148 +16,206 @@ export function seekTo(positionSeconds: number) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Hermes-compatible fetch with timeout
-// (AbortSignal.timeout is NOT available on React Native Hermes)
+// Fetch with timeout (Hermes-compatible — no AbortSignal.timeout)
 // ─────────────────────────────────────────────────────────────
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
+function fetchWithTimeout(url: string, options: RequestInit = {}, ms = 8000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(t));
 }
 
 // ─────────────────────────────────────────────────────────────
-// MASTER STREAM RESOLVER
-// Priority order:
-//   1. YouTube Internal API (Android client) — cipher-free, direct
-//   2. JioSaavn — for Indian/Bollywood songs only (with strict matching)
-//   3. Piped proxy — fallback
+// Expo host URI helpers
+// ─────────────────────────────────────────────────────────────
+function getExpoHost(): { ip: string; expoPort: string } | null {
+  const raw =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+  if (!raw) return null;
+  const [ip, port] = raw.split(':');
+  return { ip, expoPort: port || '8081' };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Boot the standalone audio server (port 3001)
+// Called once on app mount. The API route starts a real Node.js
+// HTTP server alongside Metro — no extra command needed.
+// ─────────────────────────────────────────────────────────────
+const AUDIO_PORT = 3001;
+let audioServerBooted = false;
+
+async function bootAudioServer(ip: string, expoPort: string): Promise<void> {
+  if (audioServerBooted) return;
+  try {
+    const res = await fetchWithTimeout(`http://${ip}:${expoPort}/api/stream`, {}, 5000);
+    if (res.ok) {
+      audioServerBooted = true;
+      console.log('[AudioBoot] ✅ Audio server ready on port', AUDIO_PORT);
+    }
+  } catch (e: any) {
+    console.log('[AudioBoot] Could not reach Expo API:', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// STREAM RESOLVER
+//
+// Tier 1 — Standalone Node.js audio server (port 3001)
+//   Auto-started by the Expo API route when app mounts.
+//   Uses @distube/ytdl-core in real Node.js — no Hermes limits.
+//   Streams directly via http.pipe() — no ReadableStream conversion.
+//   Phone talks to http://PC_IP:3001/?id=VIDEO_ID
+//
+// Tier 2 — JioSaavn (no server needed, Indian/English hits)
+//   Multiple API variants for resilience.
+//
+// Tier 3 — Piped API (no server needed, YouTube public proxies)
+//   Parallel race across 10 instances.
 // ─────────────────────────────────────────────────────────────
 async function resolveAudioUrl(
   videoId: string,
   title: string,
   artist: string
 ): Promise<string | null> {
-  console.log(`[StreamResolver] Resolving "${title}" by "${artist}" (id: ${videoId})`);
+  console.log(`[Resolver] "${title}" (${videoId})`);
 
-  // ── Priority 1: Local PC Stream Server ───────────────────────
-  // Since React Native Hermes cannot decrypt YouTube ciphers natively,
-  // we route through a local Node.js proxy running alongside Expo.
-  try {
-    let hostIp = '127.0.0.1';
-    
-    // Get the packager IP address from Expo dynamically
-    const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.packagerOpts?.hostType;
-    
-    if (hostUri) {
-      hostIp = hostUri.split(':')[0];
-    } else if (Constants.experienceUrl) {
-      const match = Constants.experienceUrl.match(/\/\/([0-9.]+):/);
-      if (match) hostIp = match[1];
-    }
-
-    const localStreamUrl = `http://${hostIp}:3001/stream?id=${videoId}`;
-    console.log(`[StreamResolver] Requesting local server: ${localStreamUrl}`);
-    
-    const res = await fetchWithTimeout(localStreamUrl, {}, 8000);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.url) {
-        console.log(`[StreamResolver] ✅ Local Node Server SUCCESS! (Bitrate: ${data.bitrate})`);
-        return data.url;
+  // ── Tier 1: Node.js audio server on port 3001 ──────────────
+  const host = getExpoHost();
+  if (host) {
+    const streamUrl = `http://${host.ip}:${AUDIO_PORT}/?id=${videoId}`;
+    try {
+      // HEAD preflight: warms the cache AND verifies ytdl resolved the video.
+      // If ytdl fails, HEAD returns 5xx and we fall through cleanly.
+      const head = await fetchWithTimeout(streamUrl, { method: 'HEAD' }, 15000);
+      if (head.ok) {
+        console.log(`[Resolver] ✅ T1 audio server → ${streamUrl}`);
+        return streamUrl;
       }
-    } else {
-       console.log(`[StreamResolver] Local Server returned: ${res.status}`);
+      console.log(`[Resolver] T1 HEAD ${head.status} — falling through`);
+    } catch (e: any) {
+      console.log(`[Resolver] T1 error: ${e.message}`);
     }
-  } catch (err: any) {
-    console.log(`[StreamResolver] Local Server failed: ${err.message}. Is 'npm run stream' running?`);
+  } else {
+    console.log('[Resolver] T1 skipped — no Expo host (production build)');
   }
 
-  console.log('[StreamResolver] Local server failed. Trying JioSaavn...');
+  // ── Tier 2: JioSaavn ────────────────────────────────────────
+  const query = `${title} ${artist || ''}`.trim();
+  const tl = title.toLowerCase();
 
-
-  // ── Priority 2: JioSaavn CDN (Indian + Bollywood, also some English hits) ──
-  const titleLower  = title.toLowerCase();
-  const artistLower = (artist || '').toLowerCase();
-  const query       = `${title} ${artist || ''}`.trim();
-
-  const extractSaavnUrl = (r: any): string | null => {
-    if (r.url) return r.url;
-    if (r.downloadUrl) {
-      const urls = Array.isArray(r.downloadUrl) ? r.downloadUrl : [r.downloadUrl];
-      const best = urls.find((u: any) => u.quality === '320kbps') || urls[urls.length - 1];
-      return best?.link || best?.url || (typeof best === 'string' ? best : null);
+  const saavnExtractUrl = (r: any): string | null => {
+    for (const c of [r.url, r.media_url, r.downloadUrl, r.download_url]) {
+      if (!c) continue;
+      if (typeof c === 'string' && c.startsWith('http')) return c;
+      if (Array.isArray(c)) {
+        const best = c.find((u: any) => u.quality === '320kbps') ?? c[c.length - 1];
+        const link = best?.link ?? best?.url;
+        if (typeof link === 'string') return link;
+      }
     }
     return null;
   };
 
-  // Relaxed matching: title OR artist must partially match (not both required)
-  const isSaavnMatch = (r: any): boolean => {
-    const rt = (r.title || r.name || '').toLowerCase();
-    const ra = (r.artists || r.subtitle || r.artist || '').toLowerCase();
+  const saavnMatch = (r: any): boolean => {
+    const rt = (r.title ?? r.name ?? r.song ?? '').toLowerCase();
     const junk = ['karaoke', 'cover', 'remix', 'tribute', 'instrumental'];
-    if (junk.some(w => rt.includes(w) && !titleLower.includes(w))) return false;
-    // At least title must have a meaningful substring overlap
-    const words = titleLower.split(' ').filter(w => w.length > 2);
-    return words.length > 0 && words.some(w => rt.includes(w));
+    if (junk.some(w => rt.includes(w) && !tl.includes(w))) return false;
+    return tl.split(' ').filter(w => w.length > 2).some(w => rt.includes(w));
   };
 
-  for (const base of ['https://saavn-api.vercel.app', 'https://jiosaavn-api-ts.vercel.app']) {
+  const saavnEndpoints = [
+    `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=5`,
+    `https://saavn-api.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+    `https://jiosaavn-api-ts.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+  ];
+
+  for (const ep of saavnEndpoints) {
     try {
-      console.log(`[StreamResolver] Trying JioSaavn: ${base}`);
-      const res = await fetchWithTimeout(`${base}/search/songs?query=${encodeURIComponent(query)}`, {}, 7000);
+      console.log(`[Resolver] T2 JioSaavn: ${ep.split('?')[0]}`);
+      const res = await fetchWithTimeout(ep, {}, 7000);
       if (!res.ok) continue;
       const data = await res.json();
-      const results: any[] = Array.isArray(data) ? data : (data?.data?.results || data?.results || []);
-      const match = results.find(isSaavnMatch);
+      const results: any[] = Array.isArray(data)
+        ? data
+        : data?.data?.results ?? data?.results ?? data?.data ?? [];
+      const match = results.find(saavnMatch);
       if (match) {
-        const url = extractSaavnUrl(match);
+        const url = saavnExtractUrl(match);
         if (url) {
-          console.log(`[StreamResolver] ✅ JioSaavn match: "${match.title || match.name}"`);
+          console.log(`[Resolver] ✅ T2 JioSaavn: "${match.title ?? match.name}"`);
           return url;
         }
       }
     } catch (e: any) {
-      console.log(`[StreamResolver] JioSaavn ${base}: ${e.message}`);
+      console.log(`[Resolver] T2 JioSaavn error: ${e.message}`);
     }
   }
 
-  // ── Priority 3: Piped API ─────────────────────────────────────
-  for (const instance of [
+  // ── Tier 3: Piped API (race + serial) ────────────────────────
+  const pipedInstances = [
     'https://pipedapi.kavin.rocks',
     'https://api.piped.projectsegfau.lt',
-    'https://pipedapi.syncpundit.io',
     'https://pipedapi.adminforge.de',
+    'https://piped-api.garudalinux.org',
+    'https://pipedapi.syncpundit.io',
     'https://pipedapi.drgns.space',
-  ]) {
+    'https://pa.il.sbs',
+    'https://pipedapi.tokhmi.xyz',
+    'https://watchapi.whatever.social',
+    'https://api.piped.yt',
+  ];
+
+  const pipedBest = (streams: any[]): string | null => {
+    if (!streams?.length) return null;
+    return [...streams].sort((a, b) => {
+      const am = (a.mimeType ?? '').includes('mp4') ? 1 : 0;
+      const bm = (b.mimeType ?? '').includes('mp4') ? 1 : 0;
+      return am !== bm ? bm - am : (b.bitrate ?? 0) - (a.bitrate ?? 0);
+    })[0]?.url ?? null;
+  };
+
+  // Race first 3 in parallel
+  console.log('[Resolver] T3 Piped race...');
+  const raceResult = await new Promise<string | null>(resolve => {
+    let done = 0;
+    pipedInstances.slice(0, 3).forEach(async inst => {
+      try {
+        const r = await fetchWithTimeout(`${inst}/streams/${videoId}`, {}, 5000);
+        if (r.ok) {
+          const d = await r.json();
+          const url = pipedBest(d?.audioStreams);
+          if (url) { console.log(`[Resolver] ✅ T3 Piped race: ${inst}`); resolve(url); return; }
+        }
+      } catch { /* ignore */ }
+      if (++done === 3) resolve(null);
+    });
+  });
+  if (raceResult) return raceResult;
+
+  // Serial fallback
+  for (const inst of pipedInstances.slice(3)) {
     try {
-      console.log(`[StreamResolver] Trying Piped: ${instance}`);
-      const res = await fetchWithTimeout(`${instance}/streams/${videoId}`, {}, 5000);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data?.audioStreams?.length > 0) {
-        data.audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-        console.log(`[StreamResolver] ✅ Piped: ${instance}`);
-        return data.audioStreams[0].url;
-      }
-    } catch (e: any) {
-      console.log(`[StreamResolver] Piped ${instance}: ${e.message}`);
-    }
+      const r = await fetchWithTimeout(`${inst}/streams/${videoId}`, {}, 5000);
+      if (!r.ok) continue;
+      const d = await r.json();
+      const url = pipedBest(d?.audioStreams);
+      if (url) { console.log(`[Resolver] ✅ T3 Piped: ${inst}`); return url; }
+    } catch { /* ignore */ }
   }
 
-  console.error('[StreamResolver] ❌ All sources exhausted.');
+  console.error(`[Resolver] ❌ All tiers failed for: "${title}"`);
   return null;
 }
 
-
 // ─────────────────────────────────────────────────────────────
-// Polyfill window.electron so the Zustand store doesn't crash
+// Polyfill window.electron for the Zustand store
 // ─────────────────────────────────────────────────────────────
 // @ts-ignore
 if (typeof window !== 'undefined' && !window.electron) {
   // @ts-ignore
   window.electron = {
-    ytGetStreamUrl: async (id: string) => ({ success: false, error: 'mobile-noop' }),
+    ytGetStreamUrl: async (_id: string) => ({ success: false, error: 'mobile-noop' }),
     incrementPlayCount: (_id: string) => {},
     ytSearch: async (query: string) => {
       if (!ytApiInstance) {
@@ -168,21 +225,18 @@ if (typeof window !== 'undefined' && !window.electron) {
       }
       try {
         const results = await ytApiInstance.search(query, 'SONG');
-        const queryLower = query.toLowerCase();
-        const badWords = ['karaoke', 'cover', 'tribute', 'remix', 'instrumental', 'sped up', 'slowed', 'reverb', 'bass boosted', 'type beat', '8d'];
+        const ql = query.toLowerCase();
+        const bad = ['karaoke', 'cover', 'tribute', 'remix', 'instrumental', 'sped up', 'slowed', 'reverb', 'bass boosted', 'type beat', '8d'];
         return results
-          .filter((r: any) => {
-            const t = r.name.toLowerCase();
-            return !badWords.some(w => t.includes(w) && !queryLower.includes(w));
-          })
+          .filter((r: any) => !bad.some(w => r.name.toLowerCase().includes(w) && !ql.includes(w)))
           .map((r: any) => ({
             id: r.videoId, videoId: r.videoId, title: r.name,
             artist: Array.isArray(r.artist) ? r.artist.map((a: any) => a.name).join(', ') : (r.artist?.name || 'Unknown'),
             has_artwork: true,
-            artwork_path: Array.isArray(r.thumbnails) && r.thumbnails.length > 0 ? r.thumbnails[r.thumbnails.length - 1].url : null,
+            artwork_path: r.thumbnails?.at(-1)?.url ?? null,
             duration: r.duration || 0, isStream: true,
           }));
-      } catch (e) { return []; }
+      } catch { return []; }
     },
     ytSearchTrending: async (query: string, type: string) => {
       if (!ytApiInstance) {
@@ -191,32 +245,27 @@ if (typeof window !== 'undefined' && !window.electron) {
         ytApiInstance = api;
       }
       try {
-        let cleanQuery = query;
+        let q = query;
         if (type === 'artist' && query.includes('top 10')) {
-          cleanQuery = query.replace('top 10 monthly ', '').replace(' artist', '') + ' popular artists';
+          q = query.replace('top 10 monthly ', '').replace(' artist', '') + ' popular artists';
         }
-        const results = await ytApiInstance.search(cleanQuery, type === 'artist' ? 'ARTIST' : 'SONG');
+        const results = await ytApiInstance.search(q, type === 'artist' ? 'ARTIST' : 'SONG');
+        const bad = ['karaoke', 'cover', 'tribute', 'remix', 'instrumental', 'sped up', 'slowed', 'reverb', 'bass boosted', 'type beat', '8d'];
         if (type === 'artist') {
-          const fakeKw = ['karaoke','cover','tribute','remix','instrumental','sped up','slowed','reverb','bass boosted','type beat','8d','lofi','relaxing','sleep music','bgm','hits','compilation'];
           return results
-            .filter((r: any) => !fakeKw.some(w => r.name.toLowerCase().includes(w)))
+            .filter((r: any) => !bad.some(w => r.name.toLowerCase().includes(w)))
             .map((r: any) => ({ id: r.browseId || r.name, name: r.name, thumbnails: r.thumbnails || [] }));
         }
-        const bad = ['karaoke','cover','tribute','remix','instrumental','sped up','slowed','reverb','bass boosted','type beat','8d','lofi','relaxing','bgm'];
         return results
-          .filter((r: any) => {
-            const t = r.name.toLowerCase();
-            const a = (Array.isArray(r.artist) ? r.artist.map((x: any) => x.name).join(' ') : (r.artist?.name || '')).toLowerCase();
-            return !bad.some(w => t.includes(w) || a.includes(w));
-          })
+          .filter((r: any) => !bad.some(w => r.name.toLowerCase().includes(w)))
           .map((r: any) => ({
             id: r.videoId, videoId: r.videoId, title: r.name,
             artist: Array.isArray(r.artist) ? r.artist.map((a: any) => a.name).join(', ') : (r.artist?.name || 'Unknown'),
             has_artwork: true,
-            artwork_path: Array.isArray(r.thumbnails) && r.thumbnails.length > 0 ? r.thumbnails[r.thumbnails.length - 1].url : null,
+            artwork_path: r.thumbnails?.at(-1)?.url ?? null,
             duration: r.duration || 0, isStream: true,
           }));
-      } catch (e) { return []; }
+      } catch { return []; }
     },
     getSongs: async () => [],
     getPlaylists: async () => [],
@@ -227,7 +276,7 @@ if (typeof window !== 'undefined' && !window.electron) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// MobileNativeProvider Component
+// MobileNativeProvider
 // ─────────────────────────────────────────────────────────────
 export default function MobileNativeProvider({ children }: { children: React.ReactNode }) {
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -236,25 +285,30 @@ export default function MobileNativeProvider({ children }: { children: React.Rea
   const isPlaying   = usePlayerStore(state => state.isPlaying);
   const volume      = usePlayerStore(state => state.volume);
 
-  // 1. Setup audio mode + init API on mount
+  // 1. Setup audio mode + boot the audio server
   useEffect(() => {
     Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
-    }).catch(err => console.warn('[MobileNative] audio mode error:', err));
+    }).catch(err => console.warn('[MobileNative] audio mode:', err));
 
-    // Register the global seek handler
-    __globalSeekTo = (positionSeconds: number) => {
-      soundRef.current?.setPositionAsync(positionSeconds * 1000).catch(() => {});
+    __globalSeekTo = (s: number) => {
+      soundRef.current?.setPositionAsync(s * 1000).catch(() => {});
     };
 
-    // Init YTMusic in background
+    // Boot the standalone audio server (auto-starts via Expo API route)
+    const host = getExpoHost();
+    if (host) {
+      bootAudioServer(host.ip, host.expoPort);
+    }
+
+    // Init YTMusic search API
     if (!ytApiInstance) {
-      new YTMusic().initialize().then(api => {
-        ytApiInstance = api;
-      }).catch(() => {});
+      new YTMusic().initialize()
+        .then(api => { ytApiInstance = api; })
+        .catch(() => {});
     }
 
     usePlayerStore.getState().fetchLibrary();
@@ -262,55 +316,40 @@ export default function MobileNativeProvider({ children }: { children: React.Rea
     return () => { __globalSeekTo = null; };
   }, []);
 
-  // 2. Load + play audio whenever activeTrack changes
+  // 2. Load + play audio when activeTrack changes
   useEffect(() => {
-    const loadAndPlayAudio = async () => {
+    const loadAndPlay = async () => {
       if (!activeTrack) {
-        if (soundRef.current) {
-          await soundRef.current.unloadAsync();
-          soundRef.current = null;
-        }
+        await soundRef.current?.unloadAsync();
+        soundRef.current = null;
         return;
       }
 
-      let audioUrl: string | null = activeTrack.filepath || activeTrack.url || null;
+      let url: string | null = activeTrack.filepath ?? activeTrack.url ?? null;
+      if (!url && activeTrack.videoId) url = `yt-stream://${activeTrack.videoId}`;
+      if (!url) { console.warn('[MobileNative] no URL for:', activeTrack.title); return; }
 
-      if (!audioUrl && activeTrack.videoId) {
-        audioUrl = `yt-stream://${activeTrack.videoId}`;
-      }
-
-      if (!audioUrl) {
-        console.warn('[MobileNative] Track has no playable URL:', activeTrack.title);
-        return;
-      }
-
-      if (audioUrl.startsWith('yt-stream://')) {
-        const videoId = audioUrl.replace('yt-stream://', '');
-        const resolved = await resolveAudioUrl(
-          videoId,
-          activeTrack.title || '',
-          activeTrack.artist || ''
-        );
+      if (url.startsWith('yt-stream://')) {
+        const videoId = url.replace('yt-stream://', '');
+        const resolved = await resolveAudioUrl(videoId, activeTrack.title ?? '', activeTrack.artist ?? '');
         if (!resolved) {
-          console.error('[MobileNative] Could not resolve stream for:', activeTrack.title);
+          console.error('[MobileNative] stream resolve failed for:', activeTrack.title);
           return;
         }
-        audioUrl = resolved;
+        url = resolved;
       }
 
       try {
-        if (soundRef.current) {
-          await soundRef.current.unloadAsync();
-          soundRef.current = null;
-        }
+        await soundRef.current?.unloadAsync();
+        soundRef.current = null;
 
         const shouldPlay = usePlayerStore.getState().isPlaying;
         const vol = usePlayerStore.getState().volume;
 
-        console.log('[MobileNative] Loading:', audioUrl.slice(0, 70) + '...');
+        console.log('[MobileNative] Loading:', url.slice(0, 80));
 
         const { sound } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
+          { uri: url },
           { shouldPlay, volume: vol }
         );
         soundRef.current = sound;
@@ -321,34 +360,24 @@ export default function MobileNativeProvider({ children }: { children: React.Rea
               progress: status.positionMillis / 1000,
               duration: status.durationMillis ? status.durationMillis / 1000 : 0,
             });
-            if (status.didJustFinish) {
-              usePlayerStore.getState().nextTrack();
-            }
+            if (status.didJustFinish) usePlayerStore.getState().nextTrack();
           } else if (status.error) {
-            console.error('[MobileNative] ExoPlayer error:', status.error);
+            console.error('[MobileNative] playback error:', status.error);
           }
         });
-
       } catch (e) {
         console.error('[MobileNative] createAsync error:', e);
       }
     };
 
-    loadAndPlayAudio();
-
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
+    loadAndPlay();
+    return () => { soundRef.current?.unloadAsync(); };
   }, [activeTrack]);
 
-  // 3. Play / Pause toggle
+  // 3. Play / Pause
   useEffect(() => {
     if (!soundRef.current) return;
-    if (isPlaying) {
-      soundRef.current.playAsync().catch(() => {});
-    } else {
-      soundRef.current.pauseAsync().catch(() => {});
-    }
+    isPlaying ? soundRef.current.playAsync().catch(() => {}) : soundRef.current.pauseAsync().catch(() => {});
   }, [isPlaying]);
 
   // 4. Volume
